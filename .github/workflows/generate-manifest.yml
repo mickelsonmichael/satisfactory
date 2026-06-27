@@ -1,0 +1,63 @@
+# Stub: Automated save manifest regeneration pipeline
+#
+# Uncomment this workflow once a cron job on the game server is committing
+# new .sav files to the saves/ directory. This workflow will:
+#   1. Trigger whenever a new .sav file is pushed
+#   2. Regenerate saves/manifest.json
+#   3. Auto-commit the updated manifest
+#   4. The deploy.yml workflow then redeploys GitHub Pages automatically
+#
+# Requirements:
+#   - PAT with `contents: write` stored as secret MANIFEST_PAT
+#   - Or use the default GITHUB_TOKEN if the repo allows it
+
+# name: Regenerate Save Manifest
+#
+# on:
+#   push:
+#     paths:
+#       - 'saves/*.sav'
+#   workflow_dispatch:
+#
+# permissions:
+#   contents: write
+#
+# jobs:
+#   generate:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: 22
+#
+#       - name: Generate manifest
+#         run: node scripts/generate-manifest.js
+#
+#       - name: Commit updated manifest
+#         uses: stefanzweifel/git-auto-commit-action@v5
+#         with:
+#           commit_message: "chore: update saves/manifest.json"
+#           file_pattern: saves/manifest.json
+
+# ── Server-side upload script ──────────────────────────────────────────────────
+#
+# Run this on the game server (Linux/WSL) on a cron schedule to push the latest
+# autosave to this repo. Requires git credentials configured on the server.
+#
+# #!/usr/bin/env bash
+# set -euo pipefail
+# REPO_DIR="$HOME/satisfactory-map-repo"
+# SAV_SRC="$HOME/.config/Epic/FactoryGame/Saved/SaveGames"
+# LATEST=$(ls -t "$SAV_SRC"/*.sav 2>/dev/null | head -1)
+# [ -z "$LATEST" ] && exit 0
+# DATE=$(date +%Y%m%d)
+# DEST="$REPO_DIR/saves/satisfactory.$DATE.sav"
+# cp "$LATEST" "$DEST"
+# cd "$REPO_DIR"
+# node scripts/generate-manifest.js
+# git add saves/
+# git diff --cached --quiet && exit 0   # nothing changed
+# git commit -m "chore: add save satisfactory.$DATE.sav"
+# git push

@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# Map image is fetched during CI build
+public/map/
+
+# TypeScript build info
+node_modules/.tmp/
