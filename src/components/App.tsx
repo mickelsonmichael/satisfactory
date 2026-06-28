@@ -12,7 +12,6 @@ import type {
 import MapViewer from './MapViewer';
 import LayerControls from './LayerControls';
 import LoadingOverlay from './LoadingOverlay';
-import FileUpload from './FileUpload';
 
 function initLayerStates(): LayerState[] {
   return LAYER_DEFAULTS.map((d) => ({
@@ -113,26 +112,15 @@ export default function App() {
         resourceVisible={resourceVisible}
         onToggleResource={toggleResource}
         onSetAllResources={setAllResources}
+        onFileSelected={setUploadedFile}
       />
-
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 16,
-          right: 16,
-          zIndex: 1000,
-          width: 170,
-        }}
-      >
-        <FileUpload onFileSelected={setUploadedFile} />
-      </div>
 
       {error && (
         <div
           style={{
             position: 'fixed',
-            bottom: 60,
-            right: 16,
+            bottom: 16,
+            left: 16,
             zIndex: 1000,
             background: '#7f1d1d',
             color: '#fca5a5',

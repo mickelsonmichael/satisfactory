@@ -1,0 +1,47 @@
+name: Sync release branch
+
+# Keeps `main`'s history clean by funnelling every push to `main` onto the
+# dedicated `release` (deploy) branch via a merge. Deployment is handled by
+# deploy.yml, which runs when this workflow completes successfully.
+#
+# Saves (scripts/push-save.sh) commit straight to `release` and never touch
+# `main`, so they stay out of `main`'s history entirely.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-release
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge main into release
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin
+
+          if git show-ref --verify --quiet refs/remotes/origin/release; then
+            git checkout -B release origin/release
+            # Bring in the new dev commits. Save commits already on `release`
+            # live in public/saves/, so this merge does not conflict with them.
+            git merge --no-edit origin/main
+          else
+            echo "release branch does not exist yet; creating it from main"
+            git checkout -B release origin/main
+          fi
+
+          git push origin release

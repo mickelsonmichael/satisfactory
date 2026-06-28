@@ -14,6 +14,14 @@ export const COLLECTIBLE_ICONS: Record<CollectibleType, string> = {
   slugPurple: 'PowerSlugPurple_256.png',
 };
 
+// BASE_URL keeps the path correct in dev (/) and on GitHub Pages (/satisfactory/).
+export const COLLECTIBLE_ICON_BASE = `${import.meta.env.BASE_URL}icons/collectibles/`;
+
+/** Plain image URL for a collectible's icon — used by legend rows (<img>). */
+export function getCollectibleIconUrl(type: CollectibleType): string {
+  return `${COLLECTIBLE_ICON_BASE}${COLLECTIBLE_ICONS[type]}`;
+}
+
 const iconCache = new Map<string, L.DivIcon>();
 
 export function getIcon(type: CollectibleType, collected: boolean): L.DivIcon {
@@ -21,9 +29,7 @@ export function getIcon(type: CollectibleType, collected: boolean): L.DivIcon {
   const cached = iconCache.get(key);
   if (cached) return cached;
 
-  // BASE_URL keeps the path correct in dev (/) and on GitHub Pages (/satisfactory/).
-  const url = `${import.meta.env.BASE_URL}icons/collectibles/${COLLECTIBLE_ICONS[type]}`;
-  const icon = makeCircleIcon(url, collected ? 0.35 : 1);
+  const icon = makeCircleIcon(getCollectibleIconUrl(type), collected ? 0.35 : 1);
   iconCache.set(key, icon);
   return icon;
 }

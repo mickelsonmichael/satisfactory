@@ -1,22 +1,34 @@
-# Stub: Automated save manifest regeneration pipeline
+# Auto-upload pipeline reference (no active workflow needed)
 #
-# Uncomment this workflow once a cron job on the game server is committing
-# new .sav files to the saves/ directory. This workflow will:
-#   1. Trigger whenever a new .sav file is pushed
-#   2. Regenerate saves/manifest.json
-#   3. Auto-commit the updated manifest
-#   4. The deploy.yml workflow then redeploys GitHub Pages automatically
+# Deploys come off the dedicated `release` branch, not `main`:
+#   - Pushes to `main` (real dev work) are merged onto `release` by
+#     sync-release.yml, which then triggers deploy.yml.
+#   - Saves are pushed straight to `release` by scripts/push-save.sh, keeping
+#     `main`'s history free of frequent "chore: update save" commits.
+# Either path makes `deploy.yml` regenerate the manifest and redeploy Pages.
 #
-# Requirements:
-#   - PAT with `contents: write` stored as secret MANIFEST_PAT
-#   - Or use the default GITHUB_TOKEN if the repo allows it
-
+# ── How saves get pushed ────────────────────────────────────────────────────────
+# `scripts/push-save.sh` runs on the game server (containerized via Portainer,
+# alongside the dedicated server). On a schedule it:
+#   1. Clones/syncs this repo (the `release` branch)
+#   2. Copies the newest .sav into `public/saves/satisfactory.<date>.sav`
+#   3. Regenerates `public/saves/manifest.json`
+#   4. Commits and pushes to `release` (auth via DEPLOY_TOKEN, contents:write)
+#   5. `deploy.yml` then rebuilds and redeploys Pages automatically
+#
+# See the header of scripts/push-save.sh for the full list of environment vars.
+#
+# ── If you ever DO want a server-independent CI regen ───────────────────────────
+# (e.g. saves are added by some other process that doesn't run the manifest step)
+# uncomment the workflow below. It regenerates the manifest in CI and commits it.
+# It is intentionally disabled because deploy.yml already covers this case.
+#
 # name: Regenerate Save Manifest
 #
 # on:
 #   push:
 #     paths:
-#       - 'saves/*.sav'
+#       - 'public/saves/*.sav'
 #   workflow_dispatch:
 #
 # permissions:
@@ -38,26 +50,5 @@
 #       - name: Commit updated manifest
 #         uses: stefanzweifel/git-auto-commit-action@v5
 #         with:
-#           commit_message: "chore: update saves/manifest.json"
-#           file_pattern: saves/manifest.json
-
-# ── Server-side upload script ──────────────────────────────────────────────────
-#
-# Run this on the game server (Linux/WSL) on a cron schedule to push the latest
-# autosave to this repo. Requires git credentials configured on the server.
-#
-# #!/usr/bin/env bash
-# set -euo pipefail
-# REPO_DIR="$HOME/satisfactory-map-repo"
-# SAV_SRC="$HOME/.config/Epic/FactoryGame/Saved/SaveGames"
-# LATEST=$(ls -t "$SAV_SRC"/*.sav 2>/dev/null | head -1)
-# [ -z "$LATEST" ] && exit 0
-# DATE=$(date +%Y%m%d)
-# DEST="$REPO_DIR/saves/satisfactory.$DATE.sav"
-# cp "$LATEST" "$DEST"
-# cd "$REPO_DIR"
-# node scripts/generate-manifest.js
-# git add saves/
-# git diff --cached --quiet && exit 0   # nothing changed
-# git commit -m "chore: add save satisfactory.$DATE.sav"
-# git push
+#           commit_message: "chore: update public/saves/manifest.json"
+#           file_pattern: public/saves/manifest.json
