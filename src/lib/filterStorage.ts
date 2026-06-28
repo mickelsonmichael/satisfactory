@@ -1,0 +1,48 @@
+// Persists the user's selected filters (which collectibles / resources are shown)
+// to localStorage so they survive page refreshes. Intentionally does NOT persist
+// the "marked"/"unmarked" collected state — only the filter selections.
+
+import type { CollectibleType, ResourcePurity } from '../types';
+
+const COLLECTIBLE_KEY = 'satisfactory-map:collectible-filters';
+const RESOURCE_KEY = 'satisfactory-map:resource-filters';
+
+type ResourcePurityState = Record<string, Record<ResourcePurity, boolean>>;
+
+function read<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function write(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage failures (private mode, quota, etc.) — filters just won't persist.
+  }
+}
+
+// --- Collectible layer visibility (stored as the list of visible types) ---
+
+export function loadVisibleCollectibles(): Set<CollectibleType> | null {
+  const types = read<CollectibleType[]>(COLLECTIBLE_KEY);
+  return Array.isArray(types) ? new Set(types) : null;
+}
+
+export function saveVisibleCollectibles(types: CollectibleType[]): void {
+  write(COLLECTIBLE_KEY, types);
+}
+
+// --- Resource purity selection (per-layer { pure, normal, impure }) ---
+
+export function loadResourcePurity(): ResourcePurityState | null {
+  return read<ResourcePurityState>(RESOURCE_KEY);
+}
+
+export function saveResourcePurity(state: ResourcePurityState): void {
+  write(RESOURCE_KEY, state);
+}

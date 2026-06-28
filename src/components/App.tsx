@@ -2,6 +2,12 @@ import { useState, useEffect } from 'react';
 import { useManifest, saveUrl } from '../hooks/useManifest';
 import { useSaveParser } from '../hooks/useSaveParser';
 import { LAYER_DEFAULTS } from '../lib/collectibles';
+import {
+  loadVisibleCollectibles,
+  saveVisibleCollectibles,
+  loadResourcePurity,
+  saveResourcePurity,
+} from '../lib/filterStorage';
 import type {
   LayerState,
   CollectibleType,
@@ -15,8 +21,11 @@ import LayerControls from './LayerControls';
 import LoadingOverlay from './LoadingOverlay';
 
 function initLayerStates(): LayerState[] {
+  // Restore which collectible layers were visible on a previous visit, if any.
+  const saved = loadVisibleCollectibles();
   return LAYER_DEFAULTS.map((d) => ({
     ...d,
+    visible: saved ? saved.has(d.type) : d.visible,
     uncollectedCount: 0,
     collectedCount: 0,
   }));
@@ -53,9 +62,14 @@ export default function App() {
       .then((r) => r.json())
       .then((data: ResourceData) => {
         setResourceData(data);
+        // Restore saved purity selections, but only for layers that still exist.
+        const saved = loadResourcePurity();
         setResourcePurity(
           Object.fromEntries(
-            data.layers.map((l) => [l.id, { pure: false, normal: false, impure: false }]),
+            data.layers.map((l) => [
+              l.id,
+              saved?.[l.id] ?? { pure: false, normal: false, impure: false },
+            ]),
           ),
         );
       })
@@ -102,6 +116,18 @@ export default function App() {
       }),
     );
   }, [result]);
+
+  // Persist filter selections (not the marked/collected state) across refreshes.
+  useEffect(() => {
+    saveVisibleCollectibles(layerStates.filter((ls) => ls.visible).map((ls) => ls.type));
+  }, [layerStates]);
+
+  useEffect(() => {
+    // Wait until resource layers have loaded before persisting, so we never
+    // overwrite saved selections with the empty initial state.
+    if (!resourceData) return;
+    saveResourcePurity(resourcePurity);
+  }, [resourcePurity, resourceData]);
 
   function markCollected(id: string) {
     setLocalCollected((prev) => new Set(prev).add(id));
