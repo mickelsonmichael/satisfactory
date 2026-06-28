@@ -12,7 +12,8 @@ const BADGE = 14;         // checkmark badge diameter
 // Green check badge overlaid on the bottom-right of the disc to mark a
 // collectible that has been claimed in the save (more legible than dimming alone).
 const checkBadge =
-  `<div style="position:absolute;right:-2px;bottom:-2px;width:${BADGE}px;height:${BADGE}px;` +
+  // z-index 2 keeps the badge above the disc (z-index 1) — the height tab sits below at 0.
+  `<div style="position:absolute;right:-2px;bottom:-2px;z-index:2;width:${BADGE}px;height:${BADGE}px;` +
   `border-radius:50%;background:${CHECK_GREEN};border:1.5px solid #fff;box-sizing:border-box;` +
   `display:flex;align-items:center;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,0.5)">` +
   `<svg viewBox="0 0 24 24" width="9" height="9" fill="none" stroke="#fff" stroke-width="4" ` +
