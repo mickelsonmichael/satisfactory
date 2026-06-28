@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { LayerState, CollectibleType, ResourceLayer } from '../types';
+import { Fragment, useState } from 'react';
+import type { LayerState, CollectibleType, ResourceLayer, ResourcePurity } from '../types';
 import { getCollectibleIconUrl } from '../lib/icons';
 import FileUpload from './FileUpload';
 
@@ -18,11 +18,26 @@ interface Props {
   onGoNewer: () => void;
   onGoOlder: () => void;
   resourceLayers: ResourceLayer[];
-  resourceVisible: Record<string, boolean>;
-  onToggleResource: (id: string) => void;
+  // Per-layer purity visibility: resourcePurity[layerId][purity].
+  resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
+  onTogglePurity: (id: string, purity: ResourcePurity) => void;
   onSetAllResources: (visible: boolean) => void;
   onFileSelected: (file: File) => void;
 }
+
+// The set of purities a layer actually contains, so absent ones render no checkbox.
+function layerPurities(layer: ResourceLayer): Set<ResourcePurity> {
+  const present = new Set<ResourcePurity>();
+  for (const m of layer.markers) if (m.purity) present.add(m.purity);
+  return present;
+}
+
+// Purity options shown in the resource filter, with the accent colors used by the popup badges.
+const PURITY_OPTIONS: { value: ResourcePurity; label: string; color: string }[] = [
+  { value: 'pure', label: 'Pure', color: '#6fcf6f' },
+  { value: 'normal', label: 'Normal', color: '#f2c14e' },
+  { value: 'impure', label: 'Impure', color: '#d98a5b' },
+];
 
 const ICON_BASE = `${import.meta.env.BASE_URL}icons/resources/`;
 
@@ -81,16 +96,20 @@ export default function LayerControls({
   onGoNewer,
   onGoOlder,
   resourceLayers,
-  resourceVisible,
-  onToggleResource,
+  resourcePurity,
+  onTogglePurity,
   onSetAllResources,
   onFileSelected,
 }: Props) {
   const [resourcesExpanded, setResourcesExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
 
-  const visibleCount = resourceLayers.filter((l) => resourceVisible[l.id]).length;
-  const allVisible = resourceLayers.length > 0 && visibleCount === resourceLayers.length;
+  // "All" is reached when every present purity of every layer is enabled.
+  const allVisible =
+    resourceLayers.length > 0 &&
+    resourceLayers.every((l) =>
+      [...layerPurities(l)].every((p) => resourcePurity[l.id]?.[p]),
+    );
 
   const collectiblesAllVisible = layerStates.length > 0 && layerStates.every((ls) => ls.visible);
 
@@ -113,7 +132,7 @@ export default function LayerControls({
         color: '#ddd',
         fontFamily: 'system-ui, sans-serif',
         fontSize: 13,
-        width: 270,
+        width: 320,
         overflowY: 'auto',
         backdropFilter: 'blur(6px)',
         display: 'flex',
@@ -286,34 +305,55 @@ export default function LayerControls({
           </div>
 
           {resourcesExpanded && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8 }}>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 46px 46px 46px',
+                alignItems: 'center',
+                rowGap: 5,
+                marginTop: 8,
+              }}
+            >
+              {/* Purity column headers */}
+              <span />
+              {PURITY_OPTIONS.map((p) => (
+                <span
+                  key={p.value}
+                  style={{
+                    textAlign: 'center',
+                    fontSize: 10,
+                    color: p.color,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.3,
+                  }}
+                >
+                  {p.label}
+                </span>
+              ))}
+
               {resourceLayers.map((layer, i) => {
                 const prev = resourceLayers[i - 1];
                 const groupBreak = i === 0 || prev.group !== layer.group;
+                const present = layerPurities(layer);
+                const states = resourcePurity[layer.id];
                 return (
-                  <div key={layer.id}>
+                  <Fragment key={layer.id}>
                     {groupBreak && (
                       <div
                         style={{
+                          gridColumn: '1 / -1',
                           color: '#666',
                           fontSize: 10,
                           textTransform: 'uppercase',
                           letterSpacing: 0.5,
-                          margin: i === 0 ? '0 0 2px' : '6px 0 2px',
+                          margin: i === 0 ? '0' : '6px 0 0',
                         }}
                       >
                         {layer.group === 'well' ? 'Resource Wells' : 'Nodes'}
                       </div>
                     )}
-                    <label
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={resourceVisible[layer.id] ?? false}
-                        onChange={() => onToggleResource(layer.id)}
-                        style={{ width: 14, height: 14 }}
-                      />
+                    {/* Layer (name + icon) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                       <img
                         src={`${ICON_BASE}${layer.icon}`}
                         alt=""
@@ -321,10 +361,31 @@ export default function LayerControls({
                         height={16}
                         style={{ flexShrink: 0, objectFit: 'contain' }}
                       />
-                      <span style={{ flex: 1 }}>{layer.name}</span>
-                      <span style={{ color: '#888', fontSize: 11 }}>{layer.markers.length}</span>
-                    </label>
-                  </div>
+                      <span
+                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
+                        {layer.name}
+                      </span>
+                    </div>
+                    {/* One checkbox per purity column; a dash where the layer has none */}
+                    {PURITY_OPTIONS.map((p) =>
+                      present.has(p.value) ? (
+                        <div key={p.value} style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={states?.[p.value] ?? false}
+                            onChange={() => onTogglePurity(layer.id, p.value)}
+                            title={`${layer.name} — ${p.label}`}
+                            style={{ accentColor: p.color, width: 14, height: 14, cursor: 'pointer' }}
+                          />
+                        </div>
+                      ) : (
+                        <span key={p.value} style={{ textAlign: 'center', color: '#444' }}>
+                          –
+                        </span>
+                      ),
+                    )}
+                  </Fragment>
                 );
               })}
             </div>

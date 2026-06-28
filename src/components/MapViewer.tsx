@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import L, { type LatLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { ParseResult, LayerState, ResourceData } from '../types';
+import type { ParseResult, LayerState, ResourceData, ResourcePurity } from '../types';
 import { WORLD_BOUNDS } from '../lib/coordinates';
 import MarkerLayer from './MarkerLayer';
 import ResourceNodeLayer from './ResourceNodeLayer';
@@ -28,7 +28,8 @@ interface Props {
   localCollected: Set<string>;
   onMarkCollected: (id: string) => void;
   resourceData: ResourceData | null;
-  resourceVisible: Record<string, boolean>;
+  // Per-layer purity visibility: resourcePurity[layerId][purity].
+  resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
 }
 
 // Reports the visible bounds after the map settles so MarkerLayer can cull offscreen markers.
@@ -45,7 +46,7 @@ function ViewportTracker({ onChange }: { onChange: (b: LatLngBounds) => void }) 
   return null;
 }
 
-export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourceVisible }: Props) {
+export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
 
   return (
@@ -95,7 +96,7 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
         <ResourceNodeLayer
           key={layer.id}
           layer={layer}
-          visible={resourceVisible[layer.id] ?? false}
+          purity={resourcePurity[layer.id]}
           bounds={bounds}
           claimedNodes={result?.claimedNodes ?? EMPTY_CLAIMED}
         />

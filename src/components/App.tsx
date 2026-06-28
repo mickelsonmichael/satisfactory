@@ -8,6 +8,7 @@ import type {
   StaticCollectibles,
   StaticMarker,
   ResourceData,
+  ResourcePurity,
 } from '../types';
 import MapViewer from './MapViewer';
 import LayerControls from './LayerControls';
@@ -32,8 +33,11 @@ export default function App() {
   const [staticMarkers, setStaticMarkers] = useState<StaticMarker[]>([]);
   const [localCollected, setLocalCollected] = useState<Set<string>>(new Set());
   const [resourceData, setResourceData] = useState<ResourceData | null>(null);
-  // Resource layer visibility keyed by layer id. Default off to avoid clutter.
-  const [resourceVisible, setResourceVisible] = useState<Record<string, boolean>>({});
+  // Per-layer purity visibility: resourcePurity[layerId][purity]. A marker shows when its
+  // layer's entry for its own purity is true. Default all off to avoid clutter.
+  const [resourcePurity, setResourcePurity] = useState<
+    Record<string, Record<ResourcePurity, boolean>>
+  >({});
 
   // Load the game's complete collectible database once on mount
   useEffect(() => {
@@ -49,7 +53,11 @@ export default function App() {
       .then((r) => r.json())
       .then((data: ResourceData) => {
         setResourceData(data);
-        setResourceVisible(Object.fromEntries(data.layers.map((l) => [l.id, false])));
+        setResourcePurity(
+          Object.fromEntries(
+            data.layers.map((l) => [l.id, { pure: false, normal: false, impure: false }]),
+          ),
+        );
       })
       .catch((e) => console.error('Failed to load resourceNodes.json:', e));
   }, []);
@@ -105,12 +113,19 @@ export default function App() {
     );
   }
 
-  function toggleResource(id: string) {
-    setResourceVisible((prev) => ({ ...prev, [id]: !prev[id] }));
+  function toggleResourcePurity(id: string, purity: ResourcePurity) {
+    setResourcePurity((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [purity]: !prev[id]?.[purity] },
+    }));
   }
 
   function setAllResources(visible: boolean) {
-    setResourceVisible((prev) => Object.fromEntries(Object.keys(prev).map((id) => [id, visible])));
+    setResourcePurity((prev) =>
+      Object.fromEntries(
+        Object.keys(prev).map((id) => [id, { pure: visible, normal: visible, impure: visible }]),
+      ),
+    );
   }
 
   return (
@@ -124,7 +139,7 @@ export default function App() {
         localCollected={localCollected}
         onMarkCollected={markCollected}
         resourceData={resourceData}
-        resourceVisible={resourceVisible}
+        resourcePurity={resourcePurity}
       />
 
       <LayerControls
@@ -140,8 +155,8 @@ export default function App() {
         onGoNewer={goNewer}
         onGoOlder={goOlder}
         resourceLayers={resourceData?.layers ?? []}
-        resourceVisible={resourceVisible}
-        onToggleResource={toggleResource}
+        resourcePurity={resourcePurity}
+        onTogglePurity={toggleResourcePurity}
         onSetAllResources={setAllResources}
         onFileSelected={setUploadedFile}
       />

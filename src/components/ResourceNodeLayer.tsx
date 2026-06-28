@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { LayerGroup, Marker, Popup } from 'react-leaflet';
 import type { LatLngBounds } from 'leaflet';
-import type { ResourceLayer } from '../types';
+import type { ResourceLayer, ResourcePurity } from '../types';
 import { gameToLatLng } from '../lib/coordinates';
 import { getResourceIcon } from '../lib/resourceIcons';
 
@@ -17,7 +17,9 @@ interface PositionedNode {
 
 interface Props {
   layer: ResourceLayer;
-  visible: boolean;
+  // Which of this layer's purities are shown. Undefined until the data loads.
+  // A marker shows when its purity is enabled here; the layer renders nothing when none are.
+  purity: Record<ResourcePurity, boolean> | undefined;
   // Current map viewport; markers outside it are not mounted. null = show all (initial render).
   bounds: LatLngBounds | null;
   // Node ids that have an extractor built on them in the loaded save.
@@ -29,7 +31,8 @@ function purityLabel(p: PositionedNode['purity']): string {
   return p.charAt(0).toUpperCase() + p.slice(1);
 }
 
-export default function ResourceNodeLayer({ layer, visible, bounds, claimedNodes }: Props) {
+export default function ResourceNodeLayer({ layer, purity, bounds, claimedNodes }: Props) {
+  const anyVisible = !!purity && (purity.pure || purity.normal || purity.impure);
   // Project this layer's markers to lat/lng once; gameToLatLng never changes for a marker.
   const positioned = useMemo<PositionedNode[]>(
     () =>
@@ -43,13 +46,17 @@ export default function ResourceNodeLayer({ layer, visible, bounds, claimedNodes
   // Only mount markers within the viewport (padded so edges aren't bare while panning),
   // matching MarkerLayer — keeps the DOM small across hundreds of nodes.
   const inView = useMemo(() => {
-    if (!visible) return [];
-    if (!bounds) return positioned;
+    if (!anyVisible || !purity) return [];
+    // A marker shows when its purity is enabled. Markers with no purity (none in the
+    // current data) fall back to showing whenever any purity is enabled.
+    const passesPurity = (m: PositionedNode) => (m.purity ? purity[m.purity] : true);
+    const visibleByPurity = positioned.filter(passesPurity);
+    if (!bounds) return visibleByPurity;
     const padded = bounds.pad(0.3);
-    return positioned.filter((m) => padded.contains([m.lat, m.lng]));
-  }, [positioned, bounds, visible]);
+    return visibleByPurity.filter((m) => padded.contains([m.lat, m.lng]));
+  }, [positioned, bounds, anyVisible, purity]);
 
-  if (!visible) return null;
+  if (!anyVisible) return null;
 
   const icon = getResourceIcon(layer.icon);
   const claimedIcon = getResourceIcon(layer.icon, true);
