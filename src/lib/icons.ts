@@ -12,6 +12,10 @@ export const COLLECTIBLE_ICONS: Record<CollectibleType, string> = {
   slugBlue: 'PowerSlugGreen_256.png', // SCIM names the blue (mk1) slug "Green"
   slugYellow: 'PowerSlugYellow_256.png',
   slugPurple: 'PowerSlugPurple_256.png',
+  // These two are committed to the repo (not CI-fetched from SCIM): the Boom Box tape
+  // icon from satisfactory.wiki.gg, and the B-374 helmet cropped from its wiki render.
+  cassetteTape: 'Boom_Box.png',
+  helmet: 'B-374_Helmet.png',
 };
 
 // BASE_URL keeps the path correct in dev (/) and on GitHub Pages (/satisfactory/).

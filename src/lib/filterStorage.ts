@@ -8,6 +8,7 @@ const COLLECTIBLE_KEY = 'satisfactory-map:collectible-filters';
 const RESOURCE_KEY = 'satisfactory-map:resource-filters';
 const CAVES_KEY = 'satisfactory-map:show-caves';
 const HEIGHT_KEY = 'satisfactory-map:show-height';
+const AUTO_REFRESH_KEY = 'satisfactory-map:auto-refresh';
 
 type ResourcePurityState = Record<string, Record<ResourcePurity, boolean>>;
 
@@ -67,4 +68,14 @@ export function loadShowHeight(): boolean {
 
 export function saveShowHeight(value: boolean): void {
   write(HEIGHT_KEY, value);
+}
+
+// --- Auto-refresh toggle (periodically re-check the manifest for a newer save) ---
+
+export function loadAutoRefresh(): boolean {
+  return read<boolean>(AUTO_REFRESH_KEY) ?? false;
+}
+
+export function saveAutoRefresh(value: boolean): void {
+  write(AUTO_REFRESH_KEY, value);
 }
