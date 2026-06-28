@@ -125,4 +125,31 @@ export interface ParseResult {
   claimedNodes: Set<string>;
   sessionName: string;
   saveVersion: number;
+  // Fun aggregate statistics derived from the whole save (foundations, belt length, …).
+  stats: SaveStats;
+}
+
+// --- Save statistics (Stats tab) ---
+
+// How a stat's numeric value should be formatted for display.
+//  - 'number'   raw count with thousands separators
+//  - 'distance' value is in meters; rendered as m or km
+//  - 'area'     value is in square meters; rendered as m² / km²
+//  - 'duration' value is in seconds; rendered as days / hours
+export type StatFormat = 'number' | 'distance' | 'area' | 'duration';
+
+export interface StatItem {
+  label: string;
+  value: number;
+  format?: StatFormat; // defaults to 'number'
+  hint?: string;       // optional fun comparison / detail, shown under the value
+}
+
+export interface StatGroup {
+  title: string;
+  items: StatItem[];
+}
+
+export interface SaveStats {
+  groups: StatGroup[];
 }

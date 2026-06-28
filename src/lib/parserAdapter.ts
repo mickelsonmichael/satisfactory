@@ -1,5 +1,6 @@
 import { Parser } from '@etothepii/satisfactory-file-parser';
 import type { CollectibleMarker, ParseResult, StaticMarker } from '../types';
+import { computeStats } from './stats';
 
 interface SaveObject {
   typePath: string;
@@ -93,5 +94,9 @@ export async function parseSaveFile(
     claimedNodes,
     sessionName: header.sessionName ?? header.mapName ?? '',
     saveVersion: header.saveVersion ?? 0,
+    stats: computeStats(
+      levels as unknown as Parameters<typeof computeStats>[0],
+      header.playDurationSeconds ?? 0,
+    ),
   };
 }

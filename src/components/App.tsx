@@ -270,6 +270,7 @@ export default function App() {
         onTogglePurity={toggleResourcePurity}
         onSetAllResources={setAllResources}
         onFileSelected={setUploadedFile}
+        stats={result?.stats ?? null}
       />
 
       {error && (

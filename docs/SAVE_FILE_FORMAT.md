@@ -249,6 +249,34 @@ Parsed counts from SaveVersion 60, session "SKY CITY 2":
 
 ---
 
+## 11b. Lightweight Buildables (foundations, walls, ramps…)
+
+Since Satisfactory 1.0, bulk-placed building pieces are **not** stored as individual
+`SaveObject`s in `level.objects`. Searching `objects` for `Build_Foundation_*` finds
+almost nothing — a megabase has tens of thousands of foundations, so storing each as a
+full object would bloat the save. Instead they are packed onto the
+`BuildableSubsystem` actor's `specialProperties`:
+
+```
+object.specialProperties = {
+  type: 'BuildableSubsystemSpecialProperties',
+  buildables: [
+    { typeReference: { pathName: '…/Foundation_8x4_01.Foundation_8x4_01_C' },
+      instances: [ { transform, primaryColor, … }, … ] },  // one entry per placement
+    …
+  ],
+}
+```
+
+To count them: find the object whose `specialProperties.type ===
+'BuildableSubsystemSpecialProperties'`, then for each `buildables[]` entry the
+placement count is `instances.length`. Foundations are an 8 m × 8 m footprint
+regardless of thickness suffix (`_8x1` / `_8x2` / `_8x4`). This is the data source
+behind the Stats tab — see `src/lib/stats.ts`.
+
+Belts, pipes, hypertubes and rail tracks **are** still regular objects; their
+real-world length is the sum of segment distances through `properties.mSplineData.values[i].properties.Location.value` ({x,y,z} in cm).
+
 ## 12. World Bounds
 
 Game world extents in centimeters (Unreal Engine units):

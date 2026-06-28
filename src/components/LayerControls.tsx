@@ -1,7 +1,8 @@
 import { Fragment, useState } from 'react';
-import type { LayerState, CollectibleType, ResourceLayer, ResourcePurity } from '../types';
+import type { LayerState, CollectibleType, ResourceLayer, ResourcePurity, SaveStats } from '../types';
 import { getCollectibleIconUrl } from '../lib/icons';
 import FileUpload from './FileUpload';
+import StatsPanel from './StatsPanel';
 
 interface Props {
   layerStates: LayerState[];
@@ -32,6 +33,8 @@ interface Props {
   onTogglePurity: (id: string, purity: ResourcePurity) => void;
   onSetAllResources: (visible: boolean) => void;
   onFileSelected: (file: File) => void;
+  /** Aggregate stats for the displayed save, or null until one is parsed. */
+  stats: SaveStats | null;
 }
 
 // The set of purities a layer actually contains, so absent ones render no checkbox.
@@ -118,9 +121,11 @@ export default function LayerControls({
   onTogglePurity,
   onSetAllResources,
   onFileSelected,
+  stats,
 }: Props) {
   const [resourcesExpanded, setResourcesExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
+  const [tab, setTab] = useState<'filters' | 'stats'>('filters');
 
   // "All" is reached when every present purity of every layer is enabled.
   const allVisible =
@@ -194,17 +199,46 @@ export default function LayerControls({
         <NavButton label="▶▶" title="Newest save" disabled={!canGoNewer} onClick={onGoNewest} />
       </div>
 
-      <div
-        style={{
-          borderTop: '1px solid #333',
-          paddingTop: 8,
-          marginBottom: 10,
-          marginTop: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-        }}
-      >
+      {/* Tab strip: switch the body between the layer filters and the stats page. */}
+      <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
+        {(['filters', 'stats'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              flex: 1,
+              background: tab === t ? 'rgba(250,149,73,0.15)' : 'none',
+              border: '1px solid',
+              borderColor: tab === t ? '#FA9549' : '#333',
+              borderRadius: 5,
+              color: tab === t ? '#FA9549' : '#aaa',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              padding: '5px 0',
+              textTransform: 'capitalize',
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'stats' && <StatsPanel stats={stats} />}
+
+      {tab === 'filters' && (
+        <>
+        <div
+          style={{
+            borderTop: '1px solid #333',
+            paddingTop: 8,
+            marginBottom: 10,
+            marginTop: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}
+        >
         <label
           style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         >
@@ -462,6 +496,8 @@ export default function LayerControls({
             </div>
           )}
         </div>
+      )}
+        </>
       )}
 
       <div style={{ borderTop: '1px solid #333', marginTop: 'auto', paddingTop: 12 }}>
