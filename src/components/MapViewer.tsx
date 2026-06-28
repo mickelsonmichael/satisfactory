@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import L, { type LatLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { ParseResult, LayerState, ResourceData, ResourcePurity } from '../types';
+import type { ParseResult, LayerState, ResourceData, ResourcePurity, Cave } from '../types';
 import { WORLD_BOUNDS } from '../lib/coordinates';
 import MarkerLayer from './MarkerLayer';
 import ResourceNodeLayer from './ResourceNodeLayer';
+import CaveLayer from './CaveLayer';
 
 // Map tiles are self-hosted under public/tiles/ (downloaded by scripts/download-tiles.mjs).
 // Vite's BASE_URL ensures the path works both in local dev (/) and on GitHub Pages (/satisfactory/).
@@ -30,6 +31,8 @@ interface Props {
   resourceData: ResourceData | null;
   // Per-layer purity visibility: resourcePurity[layerId][purity].
   resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
+  caves: Cave[];
+  showCaves: boolean;
 }
 
 // Reports the visible bounds after the map settles so MarkerLayer can cull offscreen markers.
@@ -46,7 +49,7 @@ function ViewportTracker({ onChange }: { onChange: (b: LatLngBounds) => void }) 
   return null;
 }
 
-export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity }: Props) {
+export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, caves, showCaves }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
 
   return (
@@ -101,6 +104,9 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
           claimedNodes={result?.claimedNodes ?? EMPTY_CLAIMED}
         />
       ))}
+
+      {/* Cave outlines — static world geometry, toggled by the "Show Caves" checkbox. */}
+      <CaveLayer caves={caves} visible={showCaves} />
     </MapContainer>
   );
 }
