@@ -24,6 +24,8 @@ interface Props {
   canGoOlder: boolean;
   onGoNewer: () => void;
   onGoOlder: () => void;
+  onGoNewest: () => void;
+  onGoOldest: () => void;
   resourceLayers: ResourceLayer[];
   // Per-layer purity visibility: resourcePurity[layerId][purity].
   resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
@@ -57,22 +59,22 @@ const DATE_FMT = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 
-function NavArrow({
-  direction,
+function NavButton({
+  label,
+  title,
   disabled,
   onClick,
 }: {
-  direction: 'older' | 'newer';
+  label: string;
+  title: string;
   disabled: boolean;
   onClick: () => void;
 }) {
-  // "older" steps back in time (left), "newer" steps forward (right).
-  const isOlder = direction === 'older';
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      title={disabled ? `No ${isOlder ? 'older' : 'newer'} save` : `${isOlder ? 'Older' : 'Newer'} save`}
+      title={disabled ? `No ${title.toLowerCase()}` : title}
       style={{
         background: 'none',
         border: '1px solid #444',
@@ -85,7 +87,7 @@ function NavArrow({
         opacity: disabled ? 0.5 : 1,
       }}
     >
-      {isOlder ? '◀' : '▶'}
+      {label}
     </button>
   );
 }
@@ -109,6 +111,8 @@ export default function LayerControls({
   canGoOlder,
   onGoNewer,
   onGoOlder,
+  onGoNewest,
+  onGoOldest,
   resourceLayers,
   resourcePurity,
   onTogglePurity,
@@ -166,7 +170,8 @@ export default function LayerControls({
           marginBottom: 6,
         }}
       >
-        <NavArrow direction="older" disabled={!canGoOlder} onClick={onGoOlder} />
+        <NavButton label="◀◀" title="Oldest save" disabled={!canGoOlder} onClick={onGoOldest} />
+        <NavButton label="◀" title="Older save" disabled={!canGoOlder} onClick={onGoOlder} />
         <span
           style={{
             flex: 1,
@@ -185,7 +190,8 @@ export default function LayerControls({
               ? DATE_FMT.format(saveTimestamp * 1000)
               : '—'}
         </span>
-        <NavArrow direction="newer" disabled={!canGoNewer} onClick={onGoNewer} />
+        <NavButton label="▶" title="Newer save" disabled={!canGoNewer} onClick={onGoNewer} />
+        <NavButton label="▶▶" title="Newest save" disabled={!canGoNewer} onClick={onGoNewest} />
       </div>
 
       <div

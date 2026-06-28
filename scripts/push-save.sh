@@ -90,6 +90,19 @@ run_once() {
   mkdir -p "${dest_dir}"
 
   log "Latest save: ${latest}"
+
+  # --- Skip if identical to the most recent save already in the repo --------------
+  # The newest source .sav is usually unchanged between runs (the server only
+  # rewrites it on autosave). A byte comparison is enough to dedupe that: a real
+  # new autosave always differs (the header carries playtime/timestamp counters),
+  # so we never miss a genuine update and never re-upload an identical file.
+  local newest_existing
+  newest_existing="$(ls -t "${dest_dir}"/*.sav 2>/dev/null | head -1 || true)"
+  if [ -n "${newest_existing}" ] && cmp -s "${latest}" "${newest_existing}"; then
+    log "Latest save is identical to $(basename "${newest_existing}"); nothing to do."
+    return 0
+  fi
+
   cp -f "${latest}" "${dest}"
 
   # --- Optional retention: keep only the N newest .sav files ----------------------

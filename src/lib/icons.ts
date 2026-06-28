@@ -32,17 +32,19 @@ export function getIcon(
   type: CollectibleType,
   collected: boolean,
   heightLabel: string | null = null,
+  size?: number,
 ): L.DivIcon {
   // Labeled icons are per-marker (the elevation varies), so they bypass the cache.
   if (heightLabel != null) {
-    return makeCircleIcon(getCollectibleIconUrl(type), collected ? 0.35 : 1, false, heightLabel);
+    return makeCircleIcon(getCollectibleIconUrl(type), collected ? 0.35 : 1, false, heightLabel, size);
   }
 
-  const key = `${type}:${collected}`;
+  // size is part of the key so icons rebuilt at a new zoom don't collide with cached ones.
+  const key = `${type}:${collected}:${size}`;
   const cached = iconCache.get(key);
   if (cached) return cached;
 
-  const icon = makeCircleIcon(getCollectibleIconUrl(type), collected ? 0.35 : 1);
+  const icon = makeCircleIcon(getCollectibleIconUrl(type), collected ? 0.35 : 1, false, null, size);
   iconCache.set(key, icon);
   return icon;
 }

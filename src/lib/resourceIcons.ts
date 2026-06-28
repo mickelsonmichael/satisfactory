@@ -6,13 +6,14 @@ import { makeCircleIcon } from './markerIcon';
 const iconCache = new Map<string, L.DivIcon>();
 
 // `claimed` adds a green check badge, marking a node that has an extractor built on it.
-export function getResourceIcon(file: string, claimed = false): L.DivIcon {
-  const key = `${file}:${claimed}`;
+export function getResourceIcon(file: string, claimed = false, size?: number): L.DivIcon {
+  // size is part of the key so icons rebuilt at a new zoom don't collide with cached ones.
+  const key = `${file}:${claimed}:${size}`;
   const cached = iconCache.get(key);
   if (cached) return cached;
 
   // BASE_URL keeps the path correct in dev (/) and on GitHub Pages (/satisfactory/).
-  const icon = makeCircleIcon(`${import.meta.env.BASE_URL}icons/resources/${file}`, 1, claimed);
+  const icon = makeCircleIcon(`${import.meta.env.BASE_URL}icons/resources/${file}`, 1, claimed, null, size);
   iconCache.set(key, icon);
   return icon;
 }

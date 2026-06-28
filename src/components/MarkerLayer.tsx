@@ -23,6 +23,8 @@ interface Props {
   // When true, each marker shows a permanent elevation label (baked into the icon)
   // so the user can read a collectible's height without opening its popup.
   showHeight: boolean;
+  // Disc diameter in px for the current zoom (icons grow as the map zooms in).
+  iconSize: number;
 }
 
 // Elevation label drawn into the marker icon, in meters (game units are cm).
@@ -38,6 +40,7 @@ export default function MarkerLayer({
   bounds,
   onMarkCollected,
   showHeight,
+  iconSize,
 }: Props) {
   // Project this layer's markers to lat/lng once; gameToLatLng never changes for a marker.
   const ofType = useMemo<PositionedMarker[]>(
@@ -85,7 +88,7 @@ export default function MarkerLayer({
         <Marker
           key={m.id}
           position={[m.lat, m.lng]}
-          icon={getIcon(type, false, showHeight ? heightLabel(m.z) : null)}
+          icon={getIcon(type, false, showHeight ? heightLabel(m.z) : null, iconSize)}
         >
           <Popup className="sf-popup">
             <div className="sf-pop-title">{label}</div>
@@ -108,7 +111,7 @@ export default function MarkerLayer({
         <Marker
           key={m.id}
           position={[m.lat, m.lng]}
-          icon={getIcon(type, true, showHeight ? heightLabel(m.z) : null)}
+          icon={getIcon(type, true, showHeight ? heightLabel(m.z) : null, iconSize)}
         >
           <Popup className="sf-popup">
             <div className="sf-pop-title">{label}</div>
