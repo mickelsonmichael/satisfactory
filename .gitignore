@@ -3,8 +3,12 @@ dist/
 .env
 .env.local
 
-# Map image is fetched during CI build
-public/map/
+# Map tiles are fetched during CI build (run `node scripts/download-tiles.mjs` for local dev)
+public/tiles/
+
+# Icons are fetched during CI build (run the matching download script for local dev)
+public/icons/resources/
+public/icons/collectibles/
 
 # TypeScript build info
 node_modules/.tmp/

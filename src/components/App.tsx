@@ -2,7 +2,13 @@ import { useState, useEffect } from 'react';
 import { useManifest } from '../hooks/useManifest';
 import { useSaveParser } from '../hooks/useSaveParser';
 import { LAYER_DEFAULTS } from '../lib/collectibles';
-import type { LayerState, CollectibleType, StaticCollectibles, StaticMarker } from '../types';
+import type {
+  LayerState,
+  CollectibleType,
+  StaticCollectibles,
+  StaticMarker,
+  ResourceData,
+} from '../types';
 import MapViewer from './MapViewer';
 import LayerControls from './LayerControls';
 import LoadingOverlay from './LoadingOverlay';
@@ -22,13 +28,28 @@ export default function App() {
   const [layerStates, setLayerStates] = useState<LayerState[]>(initLayerStates);
   const [showCollected, setShowCollected] = useState(false);
   const [staticMarkers, setStaticMarkers] = useState<StaticMarker[]>([]);
+  const [localCollected, setLocalCollected] = useState<Set<string>>(new Set());
+  const [resourceData, setResourceData] = useState<ResourceData | null>(null);
+  // Resource layer visibility keyed by layer id. Default off to avoid clutter.
+  const [resourceVisible, setResourceVisible] = useState<Record<string, boolean>>({});
 
   // Load the game's complete collectible database once on mount
   useEffect(() => {
-    fetch('/data/collectibles.json')
+    fetch(`${import.meta.env.BASE_URL}data/collectibles.json`)
       .then((r) => r.json())
       .then((data: StaticCollectibles) => setStaticMarkers(data.markers))
       .catch((e) => console.error('Failed to load collectibles.json:', e));
+  }, []);
+
+  // Load the static resource node database once on mount (independent of the save file)
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}data/resourceNodes.json`)
+      .then((r) => r.json())
+      .then((data: ResourceData) => {
+        setResourceData(data);
+        setResourceVisible(Object.fromEntries(data.layers.map((l) => [l.id, false])));
+      })
+      .catch((e) => console.error('Failed to load resourceNodes.json:', e));
   }, []);
 
   const source = uploadedFile ?? defaultSavePath;
@@ -49,17 +70,37 @@ export default function App() {
     );
   }, [result]);
 
+  function markCollected(id: string) {
+    setLocalCollected((prev) => new Set(prev).add(id));
+  }
+
   function toggleLayer(type: CollectibleType) {
     setLayerStates((prev) =>
       prev.map((ls) => (ls.type === type ? { ...ls, visible: !ls.visible } : ls)),
     );
   }
 
+  function toggleResource(id: string) {
+    setResourceVisible((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function setAllResources(visible: boolean) {
+    setResourceVisible((prev) => Object.fromEntries(Object.keys(prev).map((id) => [id, visible])));
+  }
+
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative', background: '#111' }}>
+    <div style={{ width: '100%', height: '100%', position: 'relative', background: '#000' }}>
       <LoadingOverlay visible={loading || manifestLoading} progress={progress} message={progressMsg} />
 
-      <MapViewer result={result} layerStates={layerStates} showCollected={showCollected} />
+      <MapViewer
+        result={result}
+        layerStates={layerStates}
+        showCollected={showCollected}
+        localCollected={localCollected}
+        onMarkCollected={markCollected}
+        resourceData={resourceData}
+        resourceVisible={resourceVisible}
+      />
 
       <LayerControls
         layerStates={layerStates}
@@ -68,6 +109,10 @@ export default function App() {
         onToggleCollected={() => setShowCollected((v) => !v)}
         sessionName={result?.sessionName ?? ''}
         saveVersion={result?.saveVersion ?? 0}
+        resourceLayers={resourceData?.layers ?? []}
+        resourceVisible={resourceVisible}
+        onToggleResource={toggleResource}
+        onSetAllResources={setAllResources}
       />
 
       <div

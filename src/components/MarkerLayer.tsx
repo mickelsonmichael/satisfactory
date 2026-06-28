@@ -1,61 +1,105 @@
-import { LayerGroup, Marker, Tooltip } from 'react-leaflet';
+import { useMemo } from 'react';
+import { LayerGroup, Marker, Popup } from 'react-leaflet';
+import type { LatLngBounds } from 'leaflet';
 import type { CollectibleMarker, CollectibleType } from '../types';
 import { gameToLatLng } from '../lib/coordinates';
 import { getIcon } from '../lib/icons';
+
+interface PositionedMarker extends CollectibleMarker {
+  lat: number;
+  lng: number;
+}
 
 interface Props {
   markers: CollectibleMarker[];
   type: CollectibleType;
   label: string;
-  color: string;
   visible: boolean;
   showCollected: boolean;
+  localCollected: Set<string>;
+  // Current map viewport; markers outside it are not mounted. null = show all (initial render).
+  bounds: LatLngBounds | null;
+  onMarkCollected: (id: string) => void;
 }
 
 export default function MarkerLayer({
   markers,
   type,
   label,
-  color,
   visible,
   showCollected,
+  localCollected,
+  bounds,
+  onMarkCollected,
 }: Props) {
-  if (!visible) return null;
+  // Project this layer's markers to lat/lng once; gameToLatLng never changes for a marker.
+  const ofType = useMemo<PositionedMarker[]>(
+    () =>
+      markers
+        .filter((m) => m.type === type)
+        .map((m) => {
+          const [lat, lng] = gameToLatLng(m.x, m.y);
+          return { ...m, lat, lng };
+        }),
+    [markers, type],
+  );
 
-  const typeMarkers = markers.filter((m) => m.type === type);
-  const uncollected = typeMarkers.filter((m) => !m.collected);
-  const collected = typeMarkers.filter((m) => m.collected);
+  const { uncollected, collected } = useMemo(() => {
+    const u: PositionedMarker[] = [];
+    const c: PositionedMarker[] = [];
+    for (const m of ofType) {
+      if (m.collected || localCollected.has(m.id)) c.push(m);
+      else u.push(m);
+    }
+    return { uncollected: u, collected: c };
+  }, [ofType, localCollected]);
+
+  // Only mount markers within the viewport (padded so edges aren't bare while panning).
+  // This keeps the DOM small (~dozens instead of ~1,764), so zoom/pan don't stall on
+  // repositioning offscreen nodes.
+  const visibleUncollected = useMemo(() => {
+    if (!bounds) return uncollected;
+    const padded = bounds.pad(0.3);
+    return uncollected.filter((m) => padded.contains([m.lat, m.lng]));
+  }, [uncollected, bounds]);
+
+  const visibleCollected = useMemo(() => {
+    if (!showCollected) return [];
+    if (!bounds) return collected;
+    const padded = bounds.pad(0.3);
+    return collected.filter((m) => padded.contains([m.lat, m.lng]));
+  }, [collected, bounds, showCollected]);
+
+  if (!visible) return null;
 
   return (
     <LayerGroup>
-      {uncollected.map((m) => (
-        <Marker
-          key={m.id}
-          position={gameToLatLng(m.x, m.y)}
-          icon={getIcon(type, color, false)}
-        >
-          <Tooltip>
+      {visibleUncollected.map((m) => (
+        <Marker key={m.id} position={[m.lat, m.lng]} icon={getIcon(type, false)}>
+          <Popup>
             <strong>{label}</strong>
             <br />
             {Math.round(m.x / 100)}m, {Math.round(m.y / 100)}m, {Math.round(m.z / 100)}m
-          </Tooltip>
+            <br />
+            <button
+              onClick={() => onMarkCollected(m.id)}
+              style={{ marginTop: 6, cursor: 'pointer', padding: '2px 8px', fontSize: 12 }}
+            >
+              Mark Collected
+            </button>
+          </Popup>
         </Marker>
       ))}
 
-      {showCollected &&
-        collected.map((m) => (
-          <Marker
-            key={m.id}
-            position={gameToLatLng(m.x, m.y)}
-            icon={getIcon(type, color, true)}
-          >
-            <Tooltip>
-              <strong>{label}</strong> (collected)
-              <br />
-              {Math.round(m.x / 100)}m, {Math.round(m.y / 100)}m
-            </Tooltip>
-          </Marker>
-        ))}
+      {visibleCollected.map((m) => (
+        <Marker key={m.id} position={[m.lat, m.lng]} icon={getIcon(type, true)}>
+          <Popup>
+            <strong>{label}</strong> (collected)
+            <br />
+            {Math.round(m.x / 100)}m, {Math.round(m.y / 100)}m
+          </Popup>
+        </Marker>
+      ))}
     </LayerGroup>
   );
 }

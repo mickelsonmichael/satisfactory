@@ -11,7 +11,8 @@ Parses `.sav` files in the browser and displays collectibles on the world map.
 - Drag-and-drop or upload your own `.sav` file
 - Interactive Leaflet map with the full Satisfactory world
 - Markers for: Hard Drives, Mercer Spheres, Somersloops, Power Slugs (Blue/Yellow/Purple)
-- Toggle visibility per collectible type
+- Resource node markers: ore/oil nodes (11 types) and resource wells (oil, nitrogen, water, geysers), with purity in the popup
+- Toggle visibility per collectible type and per resource type
 - Show/hide already-collected items
 
 ## Local Development
@@ -28,6 +29,10 @@ curl -L --user-agent "Mozilla/5.0" \
 # Generate the save manifest (lists available .sav files)
 npm run generate-manifest
 
+# Download marker icons (gitignored; fetched by CI automatically)
+npm run download-resource-icons
+npm run download-collectible-icons
+
 # Start dev server
 npm run dev
 ```
@@ -43,6 +48,22 @@ Open http://localhost:5173 — the site auto-loads the most recent save.
 
 See `.github/workflows/generate-manifest.yml` for a stub that automates
 this from a game server using a cron job.
+
+## Resource Nodes
+
+Resource nodes are static world geology (they're never "collected" and don't
+depend on the save file), so they ship as committed static data in
+`public/data/resourceNodes.json`, generated from the
+[satisfactory-calculator.com](https://satisfactory-calculator.com/en/interactive-map)
+map data:
+
+```bash
+# Regenerate the node database when the game/map data changes (commit the result)
+npm run generate-resource-nodes
+
+# Fetch the official in-game icons (gitignored; CI runs this automatically)
+npm run download-resource-icons
+```
 
 ## Save File Format
 

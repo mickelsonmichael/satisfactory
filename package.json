@@ -6,7 +6,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "generate-manifest": "node scripts/generate-manifest.js"
+    "generate-manifest": "node scripts/generate-manifest.js",
+    "generate-resource-nodes": "node scripts/generate-resource-nodes.mjs",
+    "download-resource-icons": "node scripts/download-resource-icons.mjs",
+    "download-collectible-icons": "node scripts/download-collectible-icons.mjs"
   },
   "dependencies": {
     "@etothepii/satisfactory-file-parser": "^4.1.1",

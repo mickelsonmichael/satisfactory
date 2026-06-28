@@ -31,12 +31,14 @@ jobs:
       - name: Generate save manifest
         run: node scripts/generate-manifest.js
 
-      - name: Download map image
-        run: |
-          mkdir -p public/map
-          curl -L --user-agent "Mozilla/5.0" \
-            -o public/map/satisfactory-map.jpg \
-            "https://satisfactory.wiki.gg/images/8/8b/Map.jpg"
+      - name: Download map tiles
+        run: node scripts/download-tiles.mjs
+
+      - name: Download resource node icons
+        run: node scripts/download-resource-icons.mjs
+
+      - name: Download collectible icons
+        run: node scripts/download-collectible-icons.mjs
 
       - name: Build
         run: npm run build

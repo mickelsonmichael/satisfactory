@@ -40,6 +40,41 @@ export interface LayerState {
   collectedCount: number;
 }
 
+// --- Resource nodes (static world geology, independent of the save file) ---
+
+export type ResourcePurity = 'impure' | 'normal' | 'pure';
+
+export interface ResourceNodeMarker {
+  id: string;   // pathName — stable game actor identifier
+  x: number;
+  y: number;
+  z: number;
+  purity: ResourcePurity | null;
+}
+
+export interface ResourceLayer {
+  id: string;            // e.g. 'node-ironOre', 'well-water'
+  name: string;          // 'Iron Ore'
+  group: 'node' | 'well';
+  type: string;          // game class, e.g. 'Desc_OreIron_C'
+  icon: string;          // local icon filename under public/icons/resources/
+  iconUrl: string;       // source URL (used by the icon download script)
+  markers: ResourceNodeMarker[];
+}
+
+export interface ResourceData {
+  version: number;
+  source: string;
+  gameVersion: string;
+  generated: string;
+  layers: ResourceLayer[];
+}
+
+export interface ResourceLayerState {
+  id: string;
+  visible: boolean;
+}
+
 export interface ManifestSave {
   filename: string;
   path: string;
