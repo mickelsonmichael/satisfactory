@@ -24,6 +24,8 @@ interface Props {
   bounds: LatLngBounds | null;
   // Node ids that have an extractor built on them in the loaded save.
   claimedNodes: Set<string>;
+  // Disc diameter in px for the current zoom (icons grow as the map zooms in).
+  iconSize: number;
 }
 
 function purityLabel(p: PositionedNode['purity']): string {
@@ -31,7 +33,7 @@ function purityLabel(p: PositionedNode['purity']): string {
   return p.charAt(0).toUpperCase() + p.slice(1);
 }
 
-export default function ResourceNodeLayer({ layer, purity, bounds, claimedNodes }: Props) {
+export default function ResourceNodeLayer({ layer, purity, bounds, claimedNodes, iconSize }: Props) {
   const anyVisible = !!purity && (purity.pure || purity.normal || purity.impure);
   // Project this layer's markers to lat/lng once; gameToLatLng never changes for a marker.
   const positioned = useMemo<PositionedNode[]>(
@@ -58,8 +60,8 @@ export default function ResourceNodeLayer({ layer, purity, bounds, claimedNodes 
 
   if (!anyVisible) return null;
 
-  const icon = getResourceIcon(layer.icon);
-  const claimedIcon = getResourceIcon(layer.icon, true);
+  const icon = getResourceIcon(layer.icon, false, iconSize);
+  const claimedIcon = getResourceIcon(layer.icon, true, iconSize);
 
   return (
     <LayerGroup>

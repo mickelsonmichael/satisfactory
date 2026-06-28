@@ -7,6 +7,7 @@ import { WORLD_BOUNDS } from '../lib/coordinates';
 import MarkerLayer from './MarkerLayer';
 import ResourceNodeLayer from './ResourceNodeLayer';
 import CaveLayer from './CaveLayer';
+import { iconSizeForZoom } from '../lib/markerIcon';
 
 // Map tiles are self-hosted under public/tiles/ (downloaded by scripts/download-tiles.mjs).
 // Vite's BASE_URL ensures the path works both in local dev (/) and on GitHub Pages (/satisfactory/).
@@ -36,22 +37,36 @@ interface Props {
   showHeight: boolean;
 }
 
-// Reports the visible bounds after the map settles so MarkerLayer can cull offscreen markers.
-// Updates fire on moveend/zoomend only (not mid-gesture), so culling never runs during animation.
-function ViewportTracker({ onChange }: { onChange: (b: LatLngBounds) => void }) {
+// Reports the visible bounds and zoom after the map settles so MarkerLayer can cull
+// offscreen markers and size icons for the current zoom. Updates fire on moveend/zoomend
+// only (not mid-gesture), so neither culling nor resizing runs during animation.
+function ViewportTracker({
+  onChange,
+  onZoom,
+}: {
+  onChange: (b: LatLngBounds) => void;
+  onZoom: (z: number) => void;
+}) {
   const map = useMapEvents({
     moveend: () => onChange(map.getBounds()),
-    zoomend: () => onChange(map.getBounds()),
+    zoomend: () => {
+      onChange(map.getBounds());
+      onZoom(map.getZoom());
+    },
   });
-  // Seed the initial viewport (the map's `load` event may fire before this mounts).
+  // Seed the initial viewport/zoom (the map's `load` event may fire before this mounts).
   useEffect(() => {
     onChange(map.getBounds());
-  }, [map, onChange]);
+    onZoom(map.getZoom());
+  }, [map, onChange, onZoom]);
   return null;
 }
 
 export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, caves, showCaves, showHeight }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
+  // Icons grow with zoom; default to the floor size until the map reports its zoom.
+  const [zoom, setZoom] = useState<number>(2);
+  const iconSize = iconSizeForZoom(zoom);
 
   return (
     <MapContainer
@@ -65,7 +80,7 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
       zoomSnap={0.25}
       zoomDelta={0.25}
     >
-      <ViewportTracker onChange={setBounds} />
+      <ViewportTracker onChange={setBounds} onZoom={setZoom} />
 
       <TileLayer
         url={TILE_URL}
@@ -92,6 +107,7 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
             bounds={bounds}
             onMarkCollected={onMarkCollected}
             showHeight={showHeight}
+            iconSize={iconSize}
           />
         ))}
 
@@ -104,6 +120,7 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
           purity={resourcePurity[layer.id]}
           bounds={bounds}
           claimedNodes={result?.claimedNodes ?? EMPTY_CLAIMED}
+          iconSize={iconSize}
         />
       ))}
 
