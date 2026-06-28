@@ -206,16 +206,23 @@ When a player picks up a collectible:
    ```
 
 2. **DropPods (Hard Drives)**: the DropPod actor **stays in `level.objects`**
-   and exposes two boolean flags:
-   - `mHasBeenOpened` — the player cracked the casing open.
-   - `mHasBeenLooted` — the player actually **took** the hard drive.
+   and exposes two boolean flags, `mHasBeenOpened` (casing cracked) and
+   `mHasBeenLooted` (drive taken). In practice both are serialized onto the
+   actor **together**, the moment the pod is looted — an untouched pod omits
+   them entirely.
 
-   These are independent: a pod can be opened with the drive still inside, so
-   **only `mHasBeenLooted: true` means the collectible is gone.** A pod that is
-   *dismantled* is removed from `level.objects` and instead appears in
-   `level.collectables`. To mark a hard drive collected, check either
-   `mHasBeenLooted === true` **or** presence in `collectables`. Looted DropPods
-   retain their world position — useful for showing "already collected" markers.
+   ⚠️ **Do not test the boolean *value*.** The
+   `@etothepii/satisfactory-file-parser` build we use mis-reads every
+   `BoolProperty` as `false` (0 of ~1600 bools in a real save parse as `true`),
+   so `mHasBeenLooted === true` never matches. Test for the **presence** of the
+   `mHasBeenLooted` property instead — UE only writes it once the pod has been
+   interacted with, so presence is the reliable "drive taken" signal.
+
+   A pod that is *dismantled* is removed from `level.objects` and instead
+   appears in `level.collectables`. So to mark a hard drive collected: check
+   for the presence of `mHasBeenLooted` **or** presence in `collectables`.
+   Looted DropPods retain their world position — useful for showing "already
+   collected" markers.
 
 To match a pathName to a collectible type, use the base class identifier
 (before the first `.` in the last path segment) with a regex that tolerates
