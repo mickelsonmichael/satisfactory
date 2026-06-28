@@ -62,14 +62,20 @@ function parseSaveHeader(buffer) {
 }
 
 /**
- * Extract a YYYYMMDD date string from filenames like "name.20260627.sav".
- * Returns null if no date pattern is found.
+ * Extract date/time from a save filename. Handles:
+ *   - minute precision: "name.20260628-1430.sav" or "name.202606281430.sav" (UTC)
+ *   - day precision:    "name.20260628.sav"                                  (legacy)
+ * Returns { date: 'YYYY-MM-DD', time: 'HH:MM'|null, timestamp } (epoch seconds,
+ * UTC), or null. `time` is null for day-precision filenames.
  */
 function extractDateFromFilename(filename) {
-  const m = filename.match(/\.(\d{8})\./);
+  const m = filename.match(/\.(\d{4})(\d{2})(\d{2})(?:-?(\d{2})(\d{2}))?\./);
   if (!m) return null;
-  const raw = m[1];
-  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+  const [, y, mo, d, hh, mm] = m;
+  const date = `${y}-${mo}-${d}`;
+  const time = hh != null ? `${hh}:${mm}` : null;
+  const iso = `${date}T${hh ?? '00'}:${mm ?? '00'}:00Z`;
+  return { date, time, timestamp: Math.floor(new Date(iso).getTime() / 1000) };
 }
 
 const saveFiles = readdirSync(SAVES_DIR)
@@ -94,17 +100,17 @@ for (const filename of saveFiles) {
     continue;
   }
 
-  const dateFromName = extractDateFromFilename(filename);
+  const parsed = extractDateFromFilename(filename);
   // Fall back to mtime if no date in filename
-  const date = dateFromName ?? stat.mtime.toISOString().slice(0, 10);
-  const timestamp = dateFromName
-    ? new Date(date + 'T00:00:00Z').getTime() / 1000
-    : Math.floor(stat.mtimeMs / 1000);
+  const date = parsed?.date ?? stat.mtime.toISOString().slice(0, 10);
+  const timestamp = parsed?.timestamp ?? Math.floor(stat.mtimeMs / 1000);
+  // Include the time (UTC) when the filename carries minute precision.
+  const dateLabel = parsed?.time ? `${date} ${parsed.time} UTC` : date;
 
   saves.push({
     filename,
     path: `saves/${filename}`,
-    displayName: `${headerInfo.sessionName} (${date})`,
+    displayName: `${headerInfo.sessionName} (${dateLabel})`,
     saveName: headerInfo.saveName,
     sessionName: headerInfo.sessionName,
     mapName: headerInfo.mapName,

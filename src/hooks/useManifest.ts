@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react';
-import type { Manifest } from '../types';
+import type { Manifest, ManifestSave } from '../types';
 
 interface UseManifestResult {
   manifest: Manifest | null;
-  defaultSavePath: string | null;
+  /** All saves, ordered newest-first (index 0 is the most recent). */
+  saves: ManifestSave[];
+  /** Index of the default save within `saves`, or null until the manifest loads. */
+  defaultIndex: number | null;
   loading: boolean;
   error: string | null;
+}
+
+/** Build a fetchable URL from a repo-relative manifest path. */
+export function saveUrl(save: ManifestSave): string {
+  // manifest paths are repo-relative (e.g. "saves/foo.sav"); prefix BASE_URL so the
+  // fetch resolves correctly under a non-root base (GitHub Pages /satisfactory/).
+  return `${import.meta.env.BASE_URL}${save.path}`;
 }
 
 export function useManifest(): UseManifestResult {
@@ -29,14 +39,17 @@ export function useManifest(): UseManifestResult {
       });
   }, []);
 
-  const defaultSave = manifest?.saves.find((s) => s.filename === manifest.default) ?? manifest?.saves[0];
-  // manifest paths are repo-relative (e.g. "saves/foo.sav"); prefix BASE_URL so the
-  // fetch resolves correctly under a non-root base (GitHub Pages /satisfactory/).
-  const defaultSavePath = defaultSave ? `${import.meta.env.BASE_URL}${defaultSave.path}` : null;
+  const saves = manifest?.saves ?? [];
+  let defaultIndex: number | null = null;
+  if (manifest) {
+    const i = saves.findIndex((s) => s.filename === manifest.default);
+    defaultIndex = i >= 0 ? i : saves.length > 0 ? 0 : null;
+  }
 
   return {
     manifest,
-    defaultSavePath,
+    saves,
+    defaultIndex,
     loading,
     error,
   };

@@ -12,3 +12,6 @@ public/icons/collectibles/
 
 # TypeScript build info
 node_modules/.tmp/
+
+key     # Local keys, stored for convenience
+key.pub # Local keys, stored for convenience

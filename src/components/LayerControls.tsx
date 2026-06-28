@@ -9,7 +9,14 @@ interface Props {
   showCollected: boolean;
   onToggleCollected: () => void;
   sessionName: string;
-  saveVersion: number;
+  /** Unix seconds for the displayed manifest save, or null when an uploaded file is shown. */
+  saveTimestamp: number | null;
+  /** Name of the user-uploaded file currently shown, or null. */
+  uploadedFileName: string | null;
+  canGoNewer: boolean;
+  canGoOlder: boolean;
+  onGoNewer: () => void;
+  onGoOlder: () => void;
   resourceLayers: ResourceLayer[];
   resourceVisible: Record<string, boolean>;
   onToggleResource: (id: string) => void;
@@ -19,13 +26,60 @@ interface Props {
 
 const ICON_BASE = `${import.meta.env.BASE_URL}icons/resources/`;
 
+// Save timestamps are epoch seconds (UTC); display them in the viewer's local time.
+const DATE_FMT = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+function NavArrow({
+  direction,
+  disabled,
+  onClick,
+}: {
+  direction: 'older' | 'newer';
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  // "older" steps back in time (left), "newer" steps forward (right).
+  const isOlder = direction === 'older';
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={disabled ? `No ${isOlder ? 'older' : 'newer'} save` : `${isOlder ? 'Older' : 'Newer'} save`}
+      style={{
+        background: 'none',
+        border: '1px solid #444',
+        borderRadius: 4,
+        color: disabled ? '#444' : '#aaa',
+        cursor: disabled ? 'default' : 'pointer',
+        fontSize: 12,
+        lineHeight: 1,
+        padding: '2px 7px',
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {isOlder ? '◀' : '▶'}
+    </button>
+  );
+}
+
 export default function LayerControls({
   layerStates,
   onToggle,
   showCollected,
   onToggleCollected,
   sessionName,
-  saveVersion,
+  saveTimestamp,
+  uploadedFileName,
+  canGoNewer,
+  canGoOlder,
+  onGoNewer,
+  onGoOlder,
   resourceLayers,
   resourceVisible,
   onToggleResource,
@@ -69,13 +123,39 @@ export default function LayerControls({
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#fff' }}>
         {sessionName || 'Satisfactory Map'}
       </div>
-      {saveVersion > 0 && (
-        <div style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>
-          SaveVersion {saveVersion}
-        </div>
-      )}
 
-      <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginBottom: 10 }}>
+      {/* Save timestamp + history navigation (older / newer) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 6,
+        }}
+      >
+        <NavArrow direction="older" disabled={!canGoOlder} onClick={onGoOlder} />
+        <span
+          style={{
+            flex: 1,
+            textAlign: 'center',
+            fontSize: 12,
+            color: '#bbb',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          title={uploadedFileName ?? undefined}
+        >
+          {uploadedFileName
+            ? `📁 ${uploadedFileName}`
+            : saveTimestamp != null
+              ? DATE_FMT.format(saveTimestamp * 1000)
+              : '—'}
+        </span>
+        <NavArrow direction="newer" disabled={!canGoNewer} onClick={onGoNewer} />
+      </div>
+
+      <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginBottom: 10, marginTop: 10 }}>
         <label
           style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         >

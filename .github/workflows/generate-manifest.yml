@@ -13,7 +13,8 @@
 #   1. Clones/syncs this repo (the `release` branch)
 #   2. Copies the newest .sav into `public/saves/satisfactory.<date>.sav`
 #   3. Regenerates `public/saves/manifest.json`
-#   4. Commits and pushes to `release` (auth via DEPLOY_TOKEN, contents:write)
+#   4. Commits and pushes to `release` (auth via DEPLOY_TOKEN PAT; fine-grained:
+#      Contents "Read and write", or classic: `repo` / `public_repo`)
 #   5. `deploy.yml` then rebuilds and redeploys Pages automatically
 #
 # See the header of scripts/push-save.sh for the full list of environment vars.
@@ -42,7 +43,7 @@
 #
 #       - uses: actions/setup-node@v4
 #         with:
-#           node-version: 22
+#           node-version: 24
 #
 #       - name: Generate manifest
 #         run: node scripts/generate-manifest.js
