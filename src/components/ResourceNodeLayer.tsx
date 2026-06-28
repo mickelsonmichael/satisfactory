@@ -20,6 +20,8 @@ interface Props {
   visible: boolean;
   // Current map viewport; markers outside it are not mounted. null = show all (initial render).
   bounds: LatLngBounds | null;
+  // Node ids that have an extractor built on them in the loaded save.
+  claimedNodes: Set<string>;
 }
 
 function purityLabel(p: PositionedNode['purity']): string {
@@ -27,7 +29,7 @@ function purityLabel(p: PositionedNode['purity']): string {
   return p.charAt(0).toUpperCase() + p.slice(1);
 }
 
-export default function ResourceNodeLayer({ layer, visible, bounds }: Props) {
+export default function ResourceNodeLayer({ layer, visible, bounds, claimedNodes }: Props) {
   // Project this layer's markers to lat/lng once; gameToLatLng never changes for a marker.
   const positioned = useMemo<PositionedNode[]>(
     () =>
@@ -50,13 +52,17 @@ export default function ResourceNodeLayer({ layer, visible, bounds }: Props) {
   if (!visible) return null;
 
   const icon = getResourceIcon(layer.icon);
+  const claimedIcon = getResourceIcon(layer.icon, true);
 
   return (
     <LayerGroup>
-      {inView.map((m) => (
-        <Marker key={m.id} position={[m.lat, m.lng]} icon={icon}>
+      {inView.map((m) => {
+        const claimed = claimedNodes.has(m.id);
+        return (
+        <Marker key={m.id} position={[m.lat, m.lng]} icon={claimed ? claimedIcon : icon}>
           <Popup className="sf-popup">
             <div className="sf-pop-title">{layer.name}</div>
+            {claimed && <span className="sf-pop-badge collected">Claimed</span>}
             {m.purity && (
               <span className={`sf-pop-badge purity-${m.purity}`}>{purityLabel(m.purity)}</span>
             )}
@@ -70,7 +76,8 @@ export default function ResourceNodeLayer({ layer, visible, bounds }: Props) {
             </dl>
           </Popup>
         </Marker>
-      ))}
+        );
+      })}
     </LayerGroup>
   );
 }
