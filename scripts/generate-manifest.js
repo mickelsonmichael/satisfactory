@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-// Scans the saves/ directory, reads raw binary headers, and writes saves/manifest.json.
+// Scans the public/saves/ directory, reads raw binary headers, and writes public/saves/manifest.json.
 // Runs without any npm deps — uses only Node built-ins and DataView on the binary header.
 // Usage: node scripts/generate-manifest.js
 
 import { readdirSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 
-const SAVES_DIR = resolve('saves');
+// Saves live under public/ so Vite copies them into the deployed build (dist/saves/).
+const SAVES_DIR = resolve('public', 'saves');
 const MANIFEST_PATH = join(SAVES_DIR, 'manifest.json');
 
 /**

@@ -13,3 +13,115 @@ html, body, #root {
 .leaflet-container {
   background: #000;
 }
+
+/* --- Satisfactory-themed marker popups ------------------------------------ */
+/* Dark "FICSIT terminal" panel: charcoal glass, orange accent, the in-game
+   construction-orange used for markers (#FA9549). Overrides Leaflet defaults. */
+
+.sf-popup .leaflet-popup-content-wrapper {
+  background: linear-gradient(160deg, #16181c 0%, #0e0f12 100%);
+  color: #f1f3f5;
+  border: 1px solid #41464e;
+  border-top: 3px solid #fa9549;
+  border-radius: 4px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.75);
+  padding: 0;
+}
+
+.sf-popup .leaflet-popup-content {
+  margin: 0;
+  padding: 12px 16px 13px;
+  /* Extra right padding so the title clears the close button. */
+  padding-right: 30px;
+  font-family: 'Segoe UI', 'Inter', system-ui, sans-serif;
+  line-height: 1.4;
+  min-width: 150px;
+}
+
+.sf-popup .leaflet-popup-tip {
+  background: #0e0f12;
+  border: 1px solid #41464e;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+.sf-popup a.leaflet-popup-close-button {
+  color: #aab0b9;
+  top: 8px;
+  right: 9px;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  line-height: 18px;
+  transition: color 0.12s ease;
+}
+.sf-popup a.leaflet-popup-close-button:hover {
+  color: #fa9549;
+  background: transparent;
+}
+
+/* Title row: resource / collectible name */
+.sf-pop-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fa9549;
+}
+
+/* Purity / status badge */
+.sf-pop-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 10px;
+  border: 1px solid currentColor;
+}
+.sf-pop-badge.purity-pure { color: #6fcf6f; }
+.sf-pop-badge.purity-normal { color: #f2c14e; }
+.sf-pop-badge.purity-impure { color: #d98a5b; }
+.sf-pop-badge.collected { color: #6fcf6f; }
+
+/* Coordinate block */
+.sf-pop-coords {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid #383d45;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 10px;
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-size: 11.5px;
+}
+.sf-pop-coords dt {
+  color: #b6bcc5;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.sf-pop-coords dd {
+  margin: 0;
+  color: #f1f3f5;
+  text-align: right;
+}
+
+/* FICSIT-style action button */
+.sf-pop-btn {
+  margin-top: 11px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1a1c1f;
+  background: #fa9549;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.05s ease;
+}
+.sf-pop-btn:hover { background: #ffb066; }
+.sf-pop-btn:active { transform: translateY(1px); }

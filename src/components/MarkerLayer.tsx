@@ -76,15 +76,17 @@ export default function MarkerLayer({
     <LayerGroup>
       {visibleUncollected.map((m) => (
         <Marker key={m.id} position={[m.lat, m.lng]} icon={getIcon(type, false)}>
-          <Popup>
-            <strong>{label}</strong>
-            <br />
-            {Math.round(m.x / 100)}m, {Math.round(m.y / 100)}m, {Math.round(m.z / 100)}m
-            <br />
-            <button
-              onClick={() => onMarkCollected(m.id)}
-              style={{ marginTop: 6, cursor: 'pointer', padding: '2px 8px', fontSize: 12 }}
-            >
+          <Popup className="sf-popup">
+            <div className="sf-pop-title">{label}</div>
+            <dl className="sf-pop-coords">
+              <dt>X</dt>
+              <dd>{Math.round(m.x / 100)} m</dd>
+              <dt>Y</dt>
+              <dd>{Math.round(m.y / 100)} m</dd>
+              <dt>Z</dt>
+              <dd>{Math.round(m.z / 100)} m</dd>
+            </dl>
+            <button className="sf-pop-btn" onClick={() => onMarkCollected(m.id)}>
               Mark Collected
             </button>
           </Popup>
@@ -93,10 +95,15 @@ export default function MarkerLayer({
 
       {visibleCollected.map((m) => (
         <Marker key={m.id} position={[m.lat, m.lng]} icon={getIcon(type, true)}>
-          <Popup>
-            <strong>{label}</strong> (collected)
-            <br />
-            {Math.round(m.x / 100)}m, {Math.round(m.y / 100)}m
+          <Popup className="sf-popup">
+            <div className="sf-pop-title">{label}</div>
+            <span className="sf-pop-badge collected">Collected</span>
+            <dl className="sf-pop-coords">
+              <dt>X</dt>
+              <dd>{Math.round(m.x / 100)} m</dd>
+              <dt>Y</dt>
+              <dd>{Math.round(m.y / 100)} m</dd>
+            </dl>
           </Popup>
         </Marker>
       ))}

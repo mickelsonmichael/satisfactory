@@ -55,11 +55,19 @@ export default function ResourceNodeLayer({ layer, visible, bounds }: Props) {
     <LayerGroup>
       {inView.map((m) => (
         <Marker key={m.id} position={[m.lat, m.lng]} icon={icon}>
-          <Popup>
-            <strong>{layer.name}</strong>
-            {m.purity && <> &middot; {purityLabel(m.purity)}</>}
-            <br />
-            {Math.round(m.x / 100)}m, {Math.round(m.y / 100)}m, {Math.round(m.z / 100)}m
+          <Popup className="sf-popup">
+            <div className="sf-pop-title">{layer.name}</div>
+            {m.purity && (
+              <span className={`sf-pop-badge purity-${m.purity}`}>{purityLabel(m.purity)}</span>
+            )}
+            <dl className="sf-pop-coords">
+              <dt>X</dt>
+              <dd>{Math.round(m.x / 100)} m</dd>
+              <dt>Y</dt>
+              <dd>{Math.round(m.y / 100)} m</dd>
+              <dt>Z</dt>
+              <dd>{Math.round(m.z / 100)} m</dd>
+            </dl>
           </Popup>
         </Marker>
       ))}
