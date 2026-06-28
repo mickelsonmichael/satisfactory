@@ -24,7 +24,16 @@ export function getCollectibleIconUrl(type: CollectibleType): string {
 
 const iconCache = new Map<string, L.DivIcon>();
 
-export function getIcon(type: CollectibleType, collected: boolean): L.DivIcon {
+export function getIcon(
+  type: CollectibleType,
+  collected: boolean,
+  heightLabel: string | null = null,
+): L.DivIcon {
+  // Labeled icons are per-marker (the elevation varies), so they bypass the cache.
+  if (heightLabel != null) {
+    return makeCircleIcon(getCollectibleIconUrl(type), collected ? 0.35 : 1, false, heightLabel);
+  }
+
   const key = `${type}:${collected}`;
   const cached = iconCache.get(key);
   if (cached) return cached;

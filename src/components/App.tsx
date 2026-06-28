@@ -9,6 +9,8 @@ import {
   saveResourcePurity,
   loadShowCaves,
   saveShowCaves,
+  loadShowHeight,
+  saveShowHeight,
 } from '../lib/filterStorage';
 import type {
   LayerState,
@@ -48,6 +50,7 @@ export default function App() {
   const [resourceData, setResourceData] = useState<ResourceData | null>(null);
   const [caves, setCaves] = useState<Cave[]>([]);
   const [showCaves, setShowCaves] = useState<boolean>(loadShowCaves);
+  const [showHeight, setShowHeight] = useState<boolean>(loadShowHeight);
   // Per-layer purity visibility: resourcePurity[layerId][purity]. A marker shows when its
   // layer's entry for its own purity is true. Default all off to avoid clutter.
   const [resourcePurity, setResourcePurity] = useState<
@@ -147,6 +150,10 @@ export default function App() {
     saveShowCaves(showCaves);
   }, [showCaves]);
 
+  useEffect(() => {
+    saveShowHeight(showHeight);
+  }, [showHeight]);
+
   function markCollected(id: string) {
     setLocalCollected((prev) => new Set(prev).add(id));
   }
@@ -186,6 +193,7 @@ export default function App() {
         resourcePurity={resourcePurity}
         caves={caves}
         showCaves={showCaves}
+        showHeight={showHeight}
       />
 
       <LayerControls
@@ -196,6 +204,8 @@ export default function App() {
         showCaves={showCaves}
         onToggleCaves={() => setShowCaves((v) => !v)}
         caveCount={caves.length}
+        showHeight={showHeight}
+        onToggleHeight={() => setShowHeight((v) => !v)}
         sessionName={result?.sessionName ?? ''}
         saveTimestamp={currentSave?.timestamp ?? null}
         uploadedFileName={uploadedFile?.name ?? null}
