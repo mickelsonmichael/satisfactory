@@ -1,18 +1,17 @@
 name: Deploy to GitHub Pages
 
 on:
-  # The `release` branch is the deploy branch. It receives:
-  #   - dev commits, merged from `main` by sync-release.yml
-  #   - .sav commits, pushed directly by scripts/push-save.sh (via PAT)
-  # Save pushes use a PAT, so they fire this `push` trigger normally. The sync
-  # workflow pushes with the default GITHUB_TOKEN, which by design does NOT fire
-  # `push` events on other workflows — so we deploy off its completion instead.
+  # The `release` branch is the deploy branch. Every commit to it deploys.
+  # It receives:
+  #   - .sav commits, pushed directly by scripts/push-save.sh (via PAT) — these
+  #     fire this `push` trigger normally.
+  #   - dev commits, merged from `main` by sync-release.yml. That workflow pushes
+  #     with the default GITHUB_TOKEN, which by design does NOT fire `push` events
+  #     on other workflows, so it can't rely on this trigger. Instead it *calls*
+  #     this workflow directly via the `workflow_call` trigger below.
   push:
     branches: [release]
-  workflow_run:
-    workflows: ["Sync release branch"]
-    types: [completed]
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -27,13 +26,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # When triggered by the sync workflow, only proceed if it succeeded.
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # Always build the tip of the deploy branch, regardless of which event
-          # triggered us (a workflow_run defaults to checking out the default branch).
+          # Always build the tip of the deploy branch (workflow_dispatch would
+          # otherwise default to checking out the default branch).
           ref: release
 
       - uses: actions/setup-node@v4

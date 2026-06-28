@@ -1,11 +1,15 @@
 name: Sync release branch
 
 # Keeps `main`'s history clean by funnelling every push to `main` onto the
-# dedicated `release` (deploy) branch via a merge. Deployment is handled by
-# deploy.yml, which runs when this workflow completes successfully.
+# dedicated `release` (deploy) branch via a merge, then deploys it.
 #
-# Saves (scripts/push-save.sh) commit straight to `release` and never touch
-# `main`, so they stay out of `main`'s history entirely.
+# The merge is pushed with the default GITHUB_TOKEN, which by design does NOT
+# fire `push` events, so we can't lean on deploy.yml's `push: [release]` trigger.
+# Instead the `deploy` job below calls deploy.yml directly as a reusable workflow.
+#
+# Saves (scripts/push-save.sh) commit straight to `release` (via PAT) and never
+# touch `main`, so they stay out of `main`'s history and deploy via deploy.yml's
+# own `push: [release]` trigger.
 
 on:
   push:
@@ -45,3 +49,13 @@ jobs:
           fi
 
           git push origin release
+
+  # Deploy the freshly-merged `release` tip. Calling deploy.yml as a reusable
+  # workflow means we don't depend on the suppressed GITHUB_TOKEN push event.
+  deploy:
+    needs: sync
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
