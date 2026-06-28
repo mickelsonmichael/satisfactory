@@ -8,6 +8,9 @@ interface Props {
   onToggle: (type: CollectibleType) => void;
   showCollected: boolean;
   onToggleCollected: () => void;
+  showCaves: boolean;
+  onToggleCaves: () => void;
+  caveCount: number;
   sessionName: string;
   /** Unix seconds for the displayed manifest save, or null when an uploaded file is shown. */
   saveTimestamp: number | null;
@@ -88,6 +91,9 @@ export default function LayerControls({
   onToggle,
   showCollected,
   onToggleCollected,
+  showCaves,
+  onToggleCaves,
+  caveCount,
   sessionName,
   saveTimestamp,
   uploadedFileName,
@@ -174,7 +180,17 @@ export default function LayerControls({
         <NavArrow direction="newer" disabled={!canGoNewer} onClick={onGoNewer} />
       </div>
 
-      <div style={{ borderTop: '1px solid #333', paddingTop: 8, marginBottom: 10, marginTop: 10 }}>
+      <div
+        style={{
+          borderTop: '1px solid #333',
+          paddingTop: 8,
+          marginBottom: 10,
+          marginTop: 10,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+        }}
+      >
         <label
           style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         >
@@ -185,6 +201,21 @@ export default function LayerControls({
             style={{ width: 14, height: 14 }}
           />
           <span style={{ color: '#888', fontSize: 12 }}>Show collected</span>
+        </label>
+
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        >
+          <input
+            type="checkbox"
+            checked={showCaves}
+            onChange={onToggleCaves}
+            style={{ accentColor: '#FA9549', width: 14, height: 14 }}
+          />
+          <span style={{ flex: 1, color: '#888', fontSize: 12 }}>Show caves</span>
+          {caveCount > 0 && (
+            <span style={{ color: '#888', fontSize: 11 }}>{caveCount}</span>
+          )}
         </label>
       </div>
 

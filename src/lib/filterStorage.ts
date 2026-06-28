@@ -6,6 +6,7 @@ import type { CollectibleType, ResourcePurity } from '../types';
 
 const COLLECTIBLE_KEY = 'satisfactory-map:collectible-filters';
 const RESOURCE_KEY = 'satisfactory-map:resource-filters';
+const CAVES_KEY = 'satisfactory-map:show-caves';
 
 type ResourcePurityState = Record<string, Record<ResourcePurity, boolean>>;
 
@@ -45,4 +46,14 @@ export function loadResourcePurity(): ResourcePurityState | null {
 
 export function saveResourcePurity(state: ResourcePurityState): void {
   write(RESOURCE_KEY, state);
+}
+
+// --- Caves overlay visibility (single boolean toggle) ---
+
+export function loadShowCaves(): boolean {
+  return read<boolean>(CAVES_KEY) ?? false;
+}
+
+export function saveShowCaves(value: boolean): void {
+  write(CAVES_KEY, value);
 }

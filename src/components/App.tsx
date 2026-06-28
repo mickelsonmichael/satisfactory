@@ -7,6 +7,8 @@ import {
   saveVisibleCollectibles,
   loadResourcePurity,
   saveResourcePurity,
+  loadShowCaves,
+  saveShowCaves,
 } from '../lib/filterStorage';
 import type {
   LayerState,
@@ -15,6 +17,8 @@ import type {
   StaticMarker,
   ResourceData,
   ResourcePurity,
+  Cave,
+  CavesData,
 } from '../types';
 import MapViewer from './MapViewer';
 import LayerControls from './LayerControls';
@@ -42,6 +46,8 @@ export default function App() {
   const [staticMarkers, setStaticMarkers] = useState<StaticMarker[]>([]);
   const [localCollected, setLocalCollected] = useState<Set<string>>(new Set());
   const [resourceData, setResourceData] = useState<ResourceData | null>(null);
+  const [caves, setCaves] = useState<Cave[]>([]);
+  const [showCaves, setShowCaves] = useState<boolean>(loadShowCaves);
   // Per-layer purity visibility: resourcePurity[layerId][purity]. A marker shows when its
   // layer's entry for its own purity is true. Default all off to avoid clutter.
   const [resourcePurity, setResourcePurity] = useState<
@@ -74,6 +80,14 @@ export default function App() {
         );
       })
       .catch((e) => console.error('Failed to load resourceNodes.json:', e));
+  }, []);
+
+  // Load the static cave geometry once on mount (independent of the save file)
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}data/caves.json`)
+      .then((r) => r.json())
+      .then((data: CavesData) => setCaves(data.caves))
+      .catch((e) => console.error('Failed to load caves.json:', e));
   }, []);
 
   // Jump to the default save once the manifest has loaded.
@@ -129,6 +143,10 @@ export default function App() {
     saveResourcePurity(resourcePurity);
   }, [resourcePurity, resourceData]);
 
+  useEffect(() => {
+    saveShowCaves(showCaves);
+  }, [showCaves]);
+
   function markCollected(id: string) {
     setLocalCollected((prev) => new Set(prev).add(id));
   }
@@ -166,6 +184,8 @@ export default function App() {
         onMarkCollected={markCollected}
         resourceData={resourceData}
         resourcePurity={resourcePurity}
+        caves={caves}
+        showCaves={showCaves}
       />
 
       <LayerControls
@@ -173,6 +193,9 @@ export default function App() {
         onToggle={toggleLayer}
         showCollected={showCollected}
         onToggleCollected={() => setShowCollected((v) => !v)}
+        showCaves={showCaves}
+        onToggleCaves={() => setShowCaves((v) => !v)}
+        caveCount={caves.length}
         sessionName={result?.sessionName ?? ''}
         saveTimestamp={currentSave?.timestamp ?? null}
         uploadedFileName={uploadedFile?.name ?? null}

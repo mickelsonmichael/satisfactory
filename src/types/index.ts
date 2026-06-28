@@ -75,6 +75,26 @@ export interface ResourceLayerState {
   visible: boolean;
 }
 
+// --- Caves (static world geometry, independent of the save file) ---
+
+// A 2D game point [x, y] in centimeters (same coordinate system as resource nodes).
+export type GamePoint = [number, number];
+
+export interface Cave {
+  id: string;            // e.g. 'cave1'
+  points: GamePoint[];   // outline polygon
+  entrances: GamePoint[][]; // each entrance is a [start, end] line segment across the cave mouth
+  holes?: GamePoint[][]; // interior cut-outs (rare)
+}
+
+export interface CavesData {
+  version: number;
+  source: string;
+  gameVersion: string;
+  generated: string;
+  caves: Cave[];
+}
+
 export interface ManifestSave {
   filename: string;
   path: string;
