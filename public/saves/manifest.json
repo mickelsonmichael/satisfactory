@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-06-28T13:07:30.325Z",
+  "generated": "2026-06-28T13:22:33.328Z",
   "default": "satisfactory.20260628.sav",
   "saves": [
     {
@@ -12,11 +12,11 @@
       "mapName": "Persistent_Level",
       "date": "2026-06-28",
       "timestamp": 1782604800,
-      "size": 3781886,
+      "size": 3808061,
       "saveHeaderType": 14,
       "saveVersion": 60,
       "buildVersion": 495413,
-      "playDurationSeconds": 1279553
+      "playDurationSeconds": 1280267
     },
     {
       "filename": "satisfactory.20260627.sav",
