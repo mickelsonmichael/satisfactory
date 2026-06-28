@@ -174,7 +174,7 @@ from parsing `saves/satisfactory.20260627.sav` (SaveVersion 60).
 
 | Display Name | typePath | Notes |
 |---|---|---|
-| Hard Drive | `/Game/FactoryGame/World/Benefit/DropPod/BP_DropPod.BP_DropPod_C` | DropPod stays in world; state in `mHasBeenOpened` property |
+| Hard Drive | `/Game/FactoryGame/World/Benefit/DropPod/BP_DropPod.BP_DropPod_C` | DropPod stays in world. Two bool flags: `mHasBeenOpened` (casing cracked) and `mHasBeenLooted` (drive taken). Use `mHasBeenLooted` to mark collected |
 | Mercer Sphere | `/Game/FactoryGame/Prototype/WAT/BP_WAT2.BP_WAT2_C` | "WAT2" = Mercer Sphere pickup actor |
 | Somersloop | `/Game/FactoryGame/Prototype/WAT/BP_WAT1.BP_WAT1_C` | "WAT1" = Somersloop pickup actor |
 | Blue Power Slug | `/Game/FactoryGame/Resource/Environment/Crystal/BP_Crystal.BP_Crystal_C` | mk1 |
@@ -206,9 +206,16 @@ When a player picks up a collectible:
    ```
 
 2. **DropPods (Hard Drives)**: the DropPod actor **stays in `level.objects`**
-   with property `mHasBeenOpened: true`. It also appears in `level.collectables`
-   when dismantled. This means opened DropPods retain their world position
-   — useful for showing "already collected" markers.
+   and exposes two boolean flags:
+   - `mHasBeenOpened` — the player cracked the casing open.
+   - `mHasBeenLooted` — the player actually **took** the hard drive.
+
+   These are independent: a pod can be opened with the drive still inside, so
+   **only `mHasBeenLooted: true` means the collectible is gone.** A pod that is
+   *dismantled* is removed from `level.objects` and instead appears in
+   `level.collectables`. To mark a hard drive collected, check either
+   `mHasBeenLooted === true` **or** presence in `collectables`. Looted DropPods
+   retain their world position — useful for showing "already collected" markers.
 
 To match a pathName to a collectible type, use the base class identifier
 (before the first `.` in the last path segment) with a regex that tolerates
