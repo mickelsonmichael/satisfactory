@@ -151,6 +151,18 @@ export default function App() {
     setSelectedIndex((i) => i + 1);
   }
 
+  function goNewest() {
+    if (!canGoNewer) return;
+    setUploadedFile(null);
+    setSelectedIndex(0);
+  }
+
+  function goOldest() {
+    if (!canGoOlder) return;
+    setUploadedFile(null);
+    setSelectedIndex(saves.length - 1);
+  }
+
   // Derive layer counts from the full marker set
   useEffect(() => {
     if (!result) return;
@@ -251,6 +263,8 @@ export default function App() {
         canGoOlder={canGoOlder}
         onGoNewer={goNewer}
         onGoOlder={goOlder}
+        onGoNewest={goNewest}
+        onGoOldest={goOldest}
         resourceLayers={resourceData?.layers ?? []}
         resourcePurity={resourcePurity}
         onTogglePurity={toggleResourcePurity}
