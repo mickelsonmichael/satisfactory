@@ -99,6 +99,8 @@ export interface ParseResult {
   // Markers in unvisited level chunks have collected=false (we can't distinguish
   // "not collected" from "not yet visited").
   markers: CollectibleMarker[];
+  // Resource node ids (pathNames) that have an extractor built on them in the save.
+  claimedNodes: Set<string>;
   sessionName: string;
   saveVersion: number;
 }

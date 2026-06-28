@@ -1,7 +1,8 @@
 import type { CollectibleType, LayerState } from '../types';
 
 // typePaths confirmed by parsing saves/satisfactory.20260627.sav (SaveVersion 60).
-// Hard drives are inside DropPods; the pod stays in the world with mHasBeenOpened tracking state.
+// Hard drives are inside DropPods; the pod stays in the world. mHasBeenLooted tracks whether
+// the drive was taken (mHasBeenOpened only means the casing was cracked — drive may still be inside).
 // Mercer Spheres = BP_WAT2, Somersloops = BP_WAT1 (WAT = alien artifact category).
 export const COLLECTIBLE_TYPE_PATHS: Record<CollectibleType, string> = {
   hardDrive:

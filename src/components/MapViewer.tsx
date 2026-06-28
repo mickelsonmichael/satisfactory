@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import L, { type LatLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { ParseResult, LayerState, ResourceData } from '../types';
+import type { ParseResult, LayerState, ResourceData, ResourcePurity } from '../types';
 import { WORLD_BOUNDS } from '../lib/coordinates';
 import MarkerLayer from './MarkerLayer';
 import ResourceNodeLayer from './ResourceNodeLayer';
@@ -18,6 +18,9 @@ const TILE_URL = `${import.meta.env.BASE_URL}tiles/realisticLayer/Stable/{z}/{x}
 const MAX_NATIVE_ZOOM = 5;
 const MAX_ZOOM = 8;
 
+// Stable empty set used before a save loads, so the claimedNodes prop reference is constant.
+const EMPTY_CLAIMED: Set<string> = new Set();
+
 interface Props {
   result: ParseResult | null;
   layerStates: LayerState[];
@@ -25,7 +28,8 @@ interface Props {
   localCollected: Set<string>;
   onMarkCollected: (id: string) => void;
   resourceData: ResourceData | null;
-  resourceVisible: Record<string, boolean>;
+  // Per-layer purity visibility: resourcePurity[layerId][purity].
+  resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
 }
 
 // Reports the visible bounds after the map settles so MarkerLayer can cull offscreen markers.
@@ -42,7 +46,7 @@ function ViewportTracker({ onChange }: { onChange: (b: LatLngBounds) => void }) 
   return null;
 }
 
-export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourceVisible }: Props) {
+export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
 
   return (
@@ -86,13 +90,15 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
           />
         ))}
 
-      {/* Resource nodes are static world geology — rendered regardless of whether a save is loaded. */}
+      {/* Resource nodes are static world geology — rendered regardless of whether a save is loaded.
+          A node gets a "claimed" check when the loaded save has an extractor built on it. */}
       {resourceData?.layers.map((layer) => (
         <ResourceNodeLayer
           key={layer.id}
           layer={layer}
-          visible={resourceVisible[layer.id] ?? false}
+          purity={resourcePurity[layer.id]}
           bounds={bounds}
+          claimedNodes={result?.claimedNodes ?? EMPTY_CLAIMED}
         />
       ))}
     </MapContainer>
