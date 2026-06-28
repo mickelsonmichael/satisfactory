@@ -28,16 +28,20 @@ services:
           memory: 4G
 
   # Snapshots the newest .sav into the repo and pushes it on an interval.
-  # Needs git + node + coreutils; node:20-bookworm-slim has node & coreutils,
+  # Needs git + node + coreutils; node:24-bookworm-slim has node & coreutils,
   # so we just add git before running the script.
   push-save:
-    image: node:20-bookworm-slim
+    image: node:24-bookworm-slim
     container_name: satisfactory-push-save
     restart: unless-stopped
     depends_on:
       - satisfactory-server
     environment:
-      # DEPLOY_TOKEN: fine-grained PAT with contents:write on the repo.
+      # DEPLOY_TOKEN: GitHub Personal Access Token used to push saves.
+      # Permissions (as labeled in the GitHub UI):
+      #   - Fine-grained PAT: Repository permissions -> Contents -> "Read and write"
+      #                       (Metadata -> "Read-only" is added automatically)
+      #   - Classic PAT:      `repo` scope (or just `public_repo` if the repo is public)
       # Put it in .env (DEPLOY_TOKEN=...) rather than committing it here.
       DEPLOY_TOKEN: "${DEPLOY_TOKEN}"
       SAVE_SRC_DIR: "/saves"

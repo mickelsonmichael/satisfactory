@@ -4,13 +4,16 @@
 # manifest, and push to GitHub. Designed to run inside a container (Portainer Stack)
 # next to the dedicated server, on a schedule.
 #
-# Auth uses a GitHub deploy token / fine-grained PAT supplied via DEPLOY_TOKEN.
-# The token needs `contents: write` on the target repo. It is passed to git through
-# an Authorization header (never written to .git/config, never echoed) so it does not
-# linger on disk in the cloned working tree.
+# Auth uses a GitHub Personal Access Token supplied via DEPLOY_TOKEN. The token is
+# embedded in the remote URL only for the network operations (clone/fetch/push) and
+# the cloned remote is then scrubbed back to a clean URL, so the token never lingers
+# in .git/config on disk. Required permissions (as labeled in the GitHub UI):
+#   - Fine-grained PAT: Repository permissions -> Contents -> "Read and write"
+#                       (Metadata -> "Read-only" is added automatically)
+#   - Classic PAT:      `repo` scope (or just `public_repo` if the repo is public)
 #
 # --- Required environment ---------------------------------------------------------
-#   DEPLOY_TOKEN     GitHub token with contents:write (fine-grained PAT recommended)
+#   DEPLOY_TOKEN     GitHub PAT (fine-grained: Contents Read and write; classic: repo)
 #   SAVE_SRC_DIR     Directory holding the server's .sav files (mount the server's
 #                    SaveGames dir here, read-only is fine)
 #
@@ -43,21 +46,22 @@ MAX_SAVES="${MAX_SAVES:-0}"
 INTERVAL_SECONDS="${INTERVAL_SECONDS:-0}"
 
 REPO_URL="https://github.com/${REPO_SLUG}.git"
+# Authed URL embeds the PAT for network ops. "x-access-token" is an arbitrary
+# username; GitHub authenticates on the token (password). Works for both classic
+# and fine-grained PATs. Kept out of .git/config by passing it explicitly and
+# scrubbing the remote after clone (see below).
+AUTH_URL="https://x-access-token:${DEPLOY_TOKEN}@github.com/${REPO_SLUG}.git"
 
 log() { printf '[push-save] %s\n' "$*"; }
-
-# Build the Authorization header value once. Format: "x-access-token:<token>" base64'd.
-# git is invoked with -c http.extraheader=... so the token never touches .git/config
-# or the process command line in plaintext. AUTH_B64 is a local var, not exported.
-AUTH_B64="$(printf 'x-access-token:%s' "${DEPLOY_TOKEN}" | base64 | tr -d '\n')"
-git_auth() { git -c "http.extraheader=AUTHORIZATION: basic ${AUTH_B64}" "$@"; }
 
 run_once() {
   # --- Ensure repo is present & up to date ----------------------------------------
   if [ ! -d "${WORK_DIR}/.git" ]; then
     log "Cloning ${REPO_SLUG} into ${WORK_DIR}"
     mkdir -p "${WORK_DIR}"
-    git_auth clone --branch "${GIT_BRANCH}" --depth 1 "${REPO_URL}" "${WORK_DIR}"
+    git clone --branch "${GIT_BRANCH}" --depth 1 "${AUTH_URL}" "${WORK_DIR}"
+    # Don't leave the token sitting in .git/config; re-auth per network op below.
+    git -C "${WORK_DIR}" remote set-url origin "${REPO_URL}"
   fi
 
   cd "${WORK_DIR}"
@@ -67,8 +71,8 @@ run_once() {
   git config --global --add safe.directory "${WORK_DIR}" 2>/dev/null || true
 
   log "Syncing with origin/${GIT_BRANCH}"
-  git_auth fetch --depth 1 origin "${GIT_BRANCH}"
-  git reset --hard "origin/${GIT_BRANCH}"
+  git fetch --depth 1 "${AUTH_URL}" "${GIT_BRANCH}"
+  git reset --hard FETCH_HEAD
 
   # --- Locate the newest source save ----------------------------------------------
   local latest
@@ -78,10 +82,11 @@ run_once() {
     return 0
   fi
 
-  local date dest_dir dest
-  date="$(date +%Y%m%d)"
+  local stamp dest_dir dest
+  # Minute precision (UTC) so frequent snapshots don't clobber each other.
+  stamp="$(date -u +%Y%m%d-%H%M)"
   dest_dir="${WORK_DIR}/${SAVES_SUBDIR}"
-  dest="${dest_dir}/satisfactory.${date}.sav"
+  dest="${dest_dir}/satisfactory.${stamp}.sav"
   mkdir -p "${dest_dir}"
 
   log "Latest save: ${latest}"
@@ -106,9 +111,9 @@ run_once() {
     return 0
   fi
 
-  git commit -m "chore: update save ${date}"
+  git commit -m "chore: update save ${stamp}"
   log "Pushing to ${REPO_SLUG} (${GIT_BRANCH})"
-  git_auth push origin "HEAD:${GIT_BRANCH}"
+  git push "${AUTH_URL}" "HEAD:${GIT_BRANCH}"
   log "Done."
 }
 

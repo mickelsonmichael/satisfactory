@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useManifest } from '../hooks/useManifest';
+import { useManifest, saveUrl } from '../hooks/useManifest';
 import { useSaveParser } from '../hooks/useSaveParser';
 import { LAYER_DEFAULTS } from '../lib/collectibles';
 import type {
@@ -22,8 +22,11 @@ function initLayerStates(): LayerState[] {
 }
 
 export default function App() {
-  const { defaultSavePath, loading: manifestLoading } = useManifest();
+  const { saves, defaultIndex, loading: manifestLoading } = useManifest();
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  // Which save in the (newest-first) history is selected. Initialized to the
+  // default once the manifest loads.
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [layerStates, setLayerStates] = useState<LayerState[]>(initLayerStates);
   const [showCollected, setShowCollected] = useState(false);
   const [staticMarkers, setStaticMarkers] = useState<StaticMarker[]>([]);
@@ -51,8 +54,31 @@ export default function App() {
       .catch((e) => console.error('Failed to load resourceNodes.json:', e));
   }, []);
 
-  const source = uploadedFile ?? defaultSavePath;
+  // Jump to the default save once the manifest has loaded.
+  useEffect(() => {
+    if (defaultIndex != null) setSelectedIndex(defaultIndex);
+  }, [defaultIndex]);
+
+  // The manifest save currently displayed (null while an uploaded file is shown).
+  const currentSave = uploadedFile ? null : (saves[selectedIndex] ?? null);
+  const source = uploadedFile ?? (currentSave ? saveUrl(currentSave) : null);
   const { result, loading, error, progress, progressMsg } = useSaveParser(source, staticMarkers);
+
+  // History navigation. saves is newest-first, so a lower index is newer.
+  const canGoNewer = saves.length > 0 && selectedIndex > 0;
+  const canGoOlder = saves.length > 0 && selectedIndex < saves.length - 1;
+
+  function goNewer() {
+    if (!canGoNewer) return;
+    setUploadedFile(null);
+    setSelectedIndex((i) => i - 1);
+  }
+
+  function goOlder() {
+    if (!canGoOlder) return;
+    setUploadedFile(null);
+    setSelectedIndex((i) => i + 1);
+  }
 
   // Derive layer counts from the full marker set
   useEffect(() => {
@@ -107,7 +133,12 @@ export default function App() {
         showCollected={showCollected}
         onToggleCollected={() => setShowCollected((v) => !v)}
         sessionName={result?.sessionName ?? ''}
-        saveVersion={result?.saveVersion ?? 0}
+        saveTimestamp={currentSave?.timestamp ?? null}
+        uploadedFileName={uploadedFile?.name ?? null}
+        canGoNewer={canGoNewer}
+        canGoOlder={canGoOlder}
+        onGoNewer={goNewer}
+        onGoOlder={goOlder}
         resourceLayers={resourceData?.layers ?? []}
         resourceVisible={resourceVisible}
         onToggleResource={toggleResource}
