@@ -60,4 +60,4 @@ services:
     command:
       - bash
       - -c
-      - "apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* && exec bash /usr/local/bin/push-save.sh"
+      - "command -v git >/dev/null 2>&1 || { apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*; }; exec bash /usr/local/bin/push-save.sh"

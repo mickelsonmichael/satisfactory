@@ -42,16 +42,22 @@ export async function parseSaveFile(
   );
 
   // Paths of DropPods whose hard drive has been TAKEN (they stay in the world, tracked
-  // via property). A pod has two distinct states: mHasBeenOpened (the casing was cracked
-  // open) and mHasBeenLooted (the hard drive was actually removed). Only the latter means
-  // the collectible is gone — a pod can be opened with the drive still sitting inside.
+  // via property). A pod tracks mHasBeenOpened (casing cracked) and mHasBeenLooted (drive
+  // removed); both are serialized onto the actor together the moment it is looted.
+  //
+  // NOTE: we test for the *presence* of mHasBeenLooted, not its boolean value. The
+  // @etothepii/satisfactory-file-parser build we use mis-reads every BoolProperty as
+  // `false` (0 of ~1600 bools in a real save parse as true), so `value === true` would
+  // never match and no hard drive would ever show collected. UE only serializes these
+  // properties once the pod has been interacted with — an untouched pod omits them
+  // entirely — so presence is the reliable "drive taken" signal.
   const lootedDropPodPaths = new Set(
     levels.flatMap((l) =>
       (l.objects ?? [])
         .filter(
           (o) =>
             o.typePath?.includes('BP_DropPod') &&
-            o.properties?.['mHasBeenLooted']?.value === true,
+            o.properties?.['mHasBeenLooted'] !== undefined,
         )
         .map((o) => o.instanceName),
     ),

@@ -24,7 +24,10 @@ export function useManifest(): UseManifestResult {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}saves/manifest.json`)
+    // The manifest URL is stable but its contents change on every deploy, so a
+    // cached copy goes stale and hides newly pushed saves until a hard refresh.
+    // `no-cache` forces a revalidation each load (cheap 304 when unchanged).
+    fetch(`${import.meta.env.BASE_URL}saves/manifest.json`, { cache: 'no-cache' })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<Manifest>;
