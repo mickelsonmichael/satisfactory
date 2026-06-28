@@ -12,6 +12,10 @@ export const COLLECTIBLE_ICONS: Record<CollectibleType, string> = {
   slugBlue: 'PowerSlugGreen_256.png', // SCIM names the blue (mk1) slug "Green"
   slugYellow: 'PowerSlugYellow_256.png',
   slugPurple: 'PowerSlugPurple_256.png',
+  // These two are committed to the repo (not CI-fetched from SCIM): the Boom Box tape
+  // icon from satisfactory.wiki.gg, and the B-374 helmet cropped from its wiki render.
+  cassetteTape: 'Boom_Box.png',
+  helmet: 'B-374_Helmet.png',
 };
 
 // BASE_URL keeps the path correct in dev (/) and on GitHub Pages (/satisfactory/).
@@ -24,7 +28,16 @@ export function getCollectibleIconUrl(type: CollectibleType): string {
 
 const iconCache = new Map<string, L.DivIcon>();
 
-export function getIcon(type: CollectibleType, collected: boolean): L.DivIcon {
+export function getIcon(
+  type: CollectibleType,
+  collected: boolean,
+  heightLabel: string | null = null,
+): L.DivIcon {
+  // Labeled icons are per-marker (the elevation varies), so they bypass the cache.
+  if (heightLabel != null) {
+    return makeCircleIcon(getCollectibleIconUrl(type), collected ? 0.35 : 1, false, heightLabel);
+  }
+
   const key = `${type}:${collected}`;
   const cached = iconCache.get(key);
   if (cached) return cached;

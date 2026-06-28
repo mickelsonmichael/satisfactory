@@ -4,7 +4,9 @@ export type CollectibleType =
   | 'somersloop'
   | 'slugBlue'
   | 'slugYellow'
-  | 'slugPurple';
+  | 'slugPurple'
+  | 'cassetteTape'
+  | 'helmet';
 
 export interface CollectibleMarker {
   id: string;   // pathName — stable game actor identifier

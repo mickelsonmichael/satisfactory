@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Manifest, ManifestSave } from '../types';
 
 interface UseManifestResult {
@@ -9,6 +9,8 @@ interface UseManifestResult {
   defaultIndex: number | null;
   loading: boolean;
   error: string | null;
+  /** Re-fetch the manifest (e.g. for auto-refresh). Does not toggle `loading`. */
+  refetch: () => void;
 }
 
 /** Build a fetchable URL from a repo-relative manifest path. */
@@ -23,24 +25,27 @@ export function useManifest(): UseManifestResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchManifest = useCallback(() => {
     // The manifest URL is stable but its contents change on every deploy, so a
     // cached copy goes stale and hides newly pushed saves until a hard refresh.
     // `no-cache` forces a revalidation each load (cheap 304 when unchanged).
-    fetch(`${import.meta.env.BASE_URL}saves/manifest.json`, { cache: 'no-cache' })
+    return fetch(`${import.meta.env.BASE_URL}saves/manifest.json`, { cache: 'no-cache' })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<Manifest>;
       })
       .then((m) => {
         setManifest(m);
-        setLoading(false);
+        setError(null);
       })
       .catch((e: unknown) => {
         setError(String(e));
-        setLoading(false);
       });
   }, []);
+
+  useEffect(() => {
+    fetchManifest().finally(() => setLoading(false));
+  }, [fetchManifest]);
 
   const saves = manifest?.saves ?? [];
   let defaultIndex: number | null = null;
@@ -55,5 +60,6 @@ export function useManifest(): UseManifestResult {
     defaultIndex,
     loading,
     error,
+    refetch: fetchManifest,
   };
 }

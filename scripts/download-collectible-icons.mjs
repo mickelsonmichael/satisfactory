@@ -13,6 +13,10 @@ import path from 'path';
 const OUT_DIR = 'public/icons/collectibles';
 const BASE = 'https://static.satisfactory-calculator.com/img/gameStable1.0';
 
+// NOTE: the cassette-tape (Boom_Box.png) and helmet (B-374_Helmet.png) icons are NOT
+// listed here — they have no clean SCIM source, so they are committed to the repo
+// directly (see .gitignore exceptions) rather than fetched in CI.
+//
 // type -> source filename (the local file keeps the same basename)
 const ICONS = [
   'HardDrive_256.png',         // hardDrive

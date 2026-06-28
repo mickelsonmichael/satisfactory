@@ -33,6 +33,7 @@ interface Props {
   resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
   caves: Cave[];
   showCaves: boolean;
+  showHeight: boolean;
 }
 
 // Reports the visible bounds after the map settles so MarkerLayer can cull offscreen markers.
@@ -49,7 +50,7 @@ function ViewportTracker({ onChange }: { onChange: (b: LatLngBounds) => void }) 
   return null;
 }
 
-export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, caves, showCaves }: Props) {
+export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, caves, showCaves, showHeight }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
 
   return (
@@ -90,6 +91,7 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
             localCollected={localCollected}
             bounds={bounds}
             onMarkCollected={onMarkCollected}
+            showHeight={showHeight}
           />
         ))}
 

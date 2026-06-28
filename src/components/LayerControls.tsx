@@ -11,6 +11,10 @@ interface Props {
   showCaves: boolean;
   onToggleCaves: () => void;
   caveCount: number;
+  showHeight: boolean;
+  onToggleHeight: () => void;
+  autoRefresh: boolean;
+  onToggleAutoRefresh: () => void;
   sessionName: string;
   /** Unix seconds for the displayed manifest save, or null when an uploaded file is shown. */
   saveTimestamp: number | null;
@@ -94,6 +98,10 @@ export default function LayerControls({
   showCaves,
   onToggleCaves,
   caveCount,
+  showHeight,
+  onToggleHeight,
+  autoRefresh,
+  onToggleAutoRefresh,
   sessionName,
   saveTimestamp,
   uploadedFileName,
@@ -216,6 +224,32 @@ export default function LayerControls({
           {caveCount > 0 && (
             <span style={{ color: '#888', fontSize: 11 }}>{caveCount}</span>
           )}
+        </label>
+
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          title="Always show each collectible's elevation next to its marker"
+        >
+          <input
+            type="checkbox"
+            checked={showHeight}
+            onChange={onToggleHeight}
+            style={{ accentColor: '#FA9549', width: 14, height: 14 }}
+          />
+          <span style={{ color: '#888', fontSize: 12 }}>Always show height</span>
+        </label>
+
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          title="Automatically re-check for a newer save every 15 minutes and load it when found"
+        >
+          <input
+            type="checkbox"
+            checked={autoRefresh}
+            onChange={onToggleAutoRefresh}
+            style={{ accentColor: '#FA9549', width: 14, height: 14 }}
+          />
+          <span style={{ color: '#888', fontSize: 12 }}>Auto-refresh (15 min)</span>
         </label>
       </div>
 

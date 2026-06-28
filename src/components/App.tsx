@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useManifest, saveUrl } from '../hooks/useManifest';
 import { useSaveParser } from '../hooks/useSaveParser';
 import { LAYER_DEFAULTS } from '../lib/collectibles';
@@ -9,6 +9,10 @@ import {
   saveResourcePurity,
   loadShowCaves,
   saveShowCaves,
+  loadShowHeight,
+  saveShowHeight,
+  loadAutoRefresh,
+  saveAutoRefresh,
 } from '../lib/filterStorage';
 import type {
   LayerState,
@@ -24,6 +28,9 @@ import MapViewer from './MapViewer';
 import LayerControls from './LayerControls';
 import LoadingOverlay from './LoadingOverlay';
 
+// How often auto-refresh re-checks the manifest for a newer save.
+const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+
 function initLayerStates(): LayerState[] {
   // Restore which collectible layers were visible on a previous visit, if any.
   const saved = loadVisibleCollectibles();
@@ -36,7 +43,7 @@ function initLayerStates(): LayerState[] {
 }
 
 export default function App() {
-  const { saves, defaultIndex, loading: manifestLoading } = useManifest();
+  const { saves, defaultIndex, loading: manifestLoading, refetch } = useManifest();
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   // Which save in the (newest-first) history is selected. Initialized to the
   // default once the manifest loads.
@@ -48,6 +55,8 @@ export default function App() {
   const [resourceData, setResourceData] = useState<ResourceData | null>(null);
   const [caves, setCaves] = useState<Cave[]>([]);
   const [showCaves, setShowCaves] = useState<boolean>(loadShowCaves);
+  const [showHeight, setShowHeight] = useState<boolean>(loadShowHeight);
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(loadAutoRefresh);
   // Per-layer purity visibility: resourcePurity[layerId][purity]. A marker shows when its
   // layer's entry for its own purity is true. Default all off to avoid clutter.
   const [resourcePurity, setResourcePurity] = useState<
@@ -94,6 +103,32 @@ export default function App() {
   useEffect(() => {
     if (defaultIndex != null) setSelectedIndex(defaultIndex);
   }, [defaultIndex]);
+
+  // While auto-refresh is on, re-check the manifest every 15 minutes for a newer save.
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = setInterval(refetch, AUTO_REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [autoRefresh, refetch]);
+
+  // Track the newest save's filename so we can detect when a refetch surfaces a new
+  // one. When it changes after the initial load, switch to it (the default is always
+  // the newest save).
+  const lastNewestRef = useRef<string | null>(null);
+  useEffect(() => {
+    const newest = saves[0]?.filename ?? null;
+    if (newest == null) return;
+    if (lastNewestRef.current == null) {
+      // First sighting; the default-jump effect handles the initial selection.
+      lastNewestRef.current = newest;
+      return;
+    }
+    if (newest !== lastNewestRef.current) {
+      lastNewestRef.current = newest;
+      setUploadedFile(null);
+      setSelectedIndex(defaultIndex ?? 0);
+    }
+  }, [saves, defaultIndex]);
 
   // The manifest save currently displayed (null while an uploaded file is shown).
   const currentSave = uploadedFile ? null : (saves[selectedIndex] ?? null);
@@ -147,6 +182,14 @@ export default function App() {
     saveShowCaves(showCaves);
   }, [showCaves]);
 
+  useEffect(() => {
+    saveShowHeight(showHeight);
+  }, [showHeight]);
+
+  useEffect(() => {
+    saveAutoRefresh(autoRefresh);
+  }, [autoRefresh]);
+
   function markCollected(id: string) {
     setLocalCollected((prev) => new Set(prev).add(id));
   }
@@ -186,6 +229,7 @@ export default function App() {
         resourcePurity={resourcePurity}
         caves={caves}
         showCaves={showCaves}
+        showHeight={showHeight}
       />
 
       <LayerControls
@@ -196,6 +240,10 @@ export default function App() {
         showCaves={showCaves}
         onToggleCaves={() => setShowCaves((v) => !v)}
         caveCount={caves.length}
+        showHeight={showHeight}
+        onToggleHeight={() => setShowHeight((v) => !v)}
+        autoRefresh={autoRefresh}
+        onToggleAutoRefresh={() => setAutoRefresh((v) => !v)}
         sessionName={result?.sessionName ?? ''}
         saveTimestamp={currentSave?.timestamp ?? null}
         uploadedFileName={uploadedFile?.name ?? null}

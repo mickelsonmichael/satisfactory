@@ -20,7 +20,13 @@ interface Props {
   // Current map viewport; markers outside it are not mounted. null = show all (initial render).
   bounds: LatLngBounds | null;
   onMarkCollected: (id: string) => void;
+  // When true, each marker shows a permanent elevation label (baked into the icon)
+  // so the user can read a collectible's height without opening its popup.
+  showHeight: boolean;
 }
+
+// Elevation label drawn into the marker icon, in meters (game units are cm).
+const heightLabel = (z: number) => `${Math.round(z / 100)} m`;
 
 export default function MarkerLayer({
   markers,
@@ -31,6 +37,7 @@ export default function MarkerLayer({
   localCollected,
   bounds,
   onMarkCollected,
+  showHeight,
 }: Props) {
   // Project this layer's markers to lat/lng once; gameToLatLng never changes for a marker.
   const ofType = useMemo<PositionedMarker[]>(
@@ -75,7 +82,11 @@ export default function MarkerLayer({
   return (
     <LayerGroup>
       {visibleUncollected.map((m) => (
-        <Marker key={m.id} position={[m.lat, m.lng]} icon={getIcon(type, false)}>
+        <Marker
+          key={m.id}
+          position={[m.lat, m.lng]}
+          icon={getIcon(type, false, showHeight ? heightLabel(m.z) : null)}
+        >
           <Popup className="sf-popup">
             <div className="sf-pop-title">{label}</div>
             <dl className="sf-pop-coords">
@@ -94,7 +105,11 @@ export default function MarkerLayer({
       ))}
 
       {visibleCollected.map((m) => (
-        <Marker key={m.id} position={[m.lat, m.lng]} icon={getIcon(type, true)}>
+        <Marker
+          key={m.id}
+          position={[m.lat, m.lng]}
+          icon={getIcon(type, true, showHeight ? heightLabel(m.z) : null)}
+        >
           <Popup className="sf-popup">
             <div className="sf-pop-title">{label}</div>
             <span className="sf-pop-badge collected">Collected</span>
