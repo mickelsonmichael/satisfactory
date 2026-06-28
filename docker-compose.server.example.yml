@@ -1,0 +1,59 @@
+# Example deployment for a Satisfactory dedicated server plus a "push-save"
+# sidecar that snapshots the latest .sav into this repo on a schedule.
+#
+# Copy this file to your server host as docker-compose.yml, drop a .env next to
+# it (see the `env_file` note below), and run:  docker compose up -d
+#
+# The host port is 77777 (game traffic). The container still listens on 7777;
+# only the published host port changed.
+
+services:
+  satisfactory-server:
+    image: wolveix/satisfactory-server:latest
+    container_name: satisfactory
+    ports:
+      - "77777:7777/tcp"
+      - "77777:7777/udp"
+      - "8888:8888/tcp"
+    volumes:
+      - /srv/satisfactory:/config
+    restart: unless-stopped
+    cap_add:
+      - sys_nice
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+
+  # Snapshots the newest .sav into the repo and pushes it on an interval.
+  # Needs git + node + coreutils; node:20-bookworm-slim has node & coreutils,
+  # so we just add git before running the script.
+  push-save:
+    image: node:20-bookworm-slim
+    container_name: satisfactory-push-save
+    restart: unless-stopped
+    depends_on:
+      - satisfactory-server
+    environment:
+      # DEPLOY_TOKEN: fine-grained PAT with contents:write on the repo.
+      # Put it in .env (DEPLOY_TOKEN=...) rather than committing it here.
+      DEPLOY_TOKEN: "${DEPLOY_TOKEN}"
+      SAVE_SRC_DIR: "/saves"
+      # Run forever, snapshotting every 30 minutes (set to 0 for one-shot).
+      INTERVAL_SECONDS: "1800"
+      # Keep only the 30 newest snapshots in the repo (0 = keep all).
+      MAX_SAVES: "30"
+      # Optional overrides (defaults shown):
+      # REPO_SLUG: "mickelsonmichael/satisfactory"
+      # GIT_BRANCH: "release"
+    volumes:
+      # The server's SaveGames directory (read-only is fine).
+      - /srv/satisfactory/saved/server/SaveGames:/saves:ro
+      # Mount the script itself so the YAML stays clean and the command is short.
+      - ./push-save.sh:/usr/local/bin/push-save.sh:ro
+    command:
+      - bash
+      - -c
+      - "apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/* && exec bash /usr/local/bin/push-save.sh"

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# push-save.sh — copy the latest Satisfactory .sav into this repo, regenerate the
+# push-save.sh - copy the latest Satisfactory .sav into this repo, regenerate the
 # manifest, and push to GitHub. Designed to run inside a container (Portainer Stack)
 # next to the dedicated server, on a schedule.
 #
@@ -9,15 +9,15 @@
 # an Authorization header (never written to .git/config, never echoed) so it does not
 # linger on disk in the cloned working tree.
 #
-# ── Required environment ────────────────────────────────────────────────────────
+# --- Required environment ---------------------------------------------------------
 #   DEPLOY_TOKEN     GitHub token with contents:write (fine-grained PAT recommended)
 #   SAVE_SRC_DIR     Directory holding the server's .sav files (mount the server's
 #                    SaveGames dir here, read-only is fine)
 #
-# ── Optional environment ────────────────────────────────────────────────────────
+# --- Optional environment ---------------------------------------------------------
 #   REPO_SLUG        owner/repo            (default: mickelsonmichael/satisfactory)
-#   GIT_BRANCH       branch to push to     (default: release — the deploy branch.
-#                    Saves go straight here so they never clutter `main`'s history;
+#   GIT_BRANCH       branch to push to     (default: release - the deploy branch.
+#                    Saves go straight here so they never clutter main's history;
 #                    pushing here triggers deploy.yml directly.)
 #   WORK_DIR         where the repo is cloned/cached (default: /workspace/repo)
 #   SAVES_SUBDIR     repo path for saves   (default: public/saves)
@@ -29,7 +29,7 @@
 #
 set -euo pipefail
 
-# ── Config ──────────────────────────────────────────────────────────────────────
+# --- Config -----------------------------------------------------------------------
 : "${DEPLOY_TOKEN:?DEPLOY_TOKEN is required}"
 : "${SAVE_SRC_DIR:?SAVE_SRC_DIR is required}"
 
@@ -48,12 +48,12 @@ log() { printf '[push-save] %s\n' "$*"; }
 
 # Build the Authorization header value once. Format: "x-access-token:<token>" base64'd.
 # git is invoked with -c http.extraheader=... so the token never touches .git/config
-# or the process command line in plaintext. AUTH_HEADER is a local var, not exported.
+# or the process command line in plaintext. AUTH_B64 is a local var, not exported.
 AUTH_B64="$(printf 'x-access-token:%s' "${DEPLOY_TOKEN}" | base64 | tr -d '\n')"
 git_auth() { git -c "http.extraheader=AUTHORIZATION: basic ${AUTH_B64}" "$@"; }
 
 run_once() {
-  # ── Ensure repo is present & up to date ───────────────────────────────────────
+  # --- Ensure repo is present & up to date ----------------------------------------
   if [ ! -d "${WORK_DIR}/.git" ]; then
     log "Cloning ${REPO_SLUG} into ${WORK_DIR}"
     mkdir -p "${WORK_DIR}"
@@ -70,7 +70,7 @@ run_once() {
   git_auth fetch --depth 1 origin "${GIT_BRANCH}"
   git reset --hard "origin/${GIT_BRANCH}"
 
-  # ── Locate the newest source save ─────────────────────────────────────────────
+  # --- Locate the newest source save ----------------------------------------------
   local latest
   latest="$(ls -t "${SAVE_SRC_DIR}"/*.sav 2>/dev/null | head -1 || true)"
   if [ -z "${latest}" ]; then
@@ -87,7 +87,7 @@ run_once() {
   log "Latest save: ${latest}"
   cp -f "${latest}" "${dest}"
 
-  # ── Optional retention: keep only the N newest .sav files ─────────────────────
+  # --- Optional retention: keep only the N newest .sav files ----------------------
   if [ "${MAX_SAVES}" -gt 0 ]; then
     ls -t "${dest_dir}"/*.sav 2>/dev/null | tail -n +"$((MAX_SAVES + 1))" | while read -r old; do
       log "Pruning old save: $(basename "${old}")"
@@ -95,11 +95,11 @@ run_once() {
     done
   fi
 
-  # ── Regenerate manifest (Node, no deps) ───────────────────────────────────────
+  # --- Regenerate manifest (Node, no deps) ----------------------------------------
   log "Regenerating manifest"
   node scripts/generate-manifest.js
 
-  # ── Commit & push only if something changed ───────────────────────────────────
+  # --- Commit & push only if something changed ------------------------------------
   git add "${SAVES_SUBDIR}"
   if git diff --cached --quiet; then
     log "No changes to commit."
@@ -112,7 +112,7 @@ run_once() {
   log "Done."
 }
 
-# ── Entry point ─────────────────────────────────────────────────────────────────
+# --- Entry point ------------------------------------------------------------------
 if [ "${INTERVAL_SECONDS}" -gt 0 ]; then
   log "Loop mode: running every ${INTERVAL_SECONDS}s"
   while true; do
