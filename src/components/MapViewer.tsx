@@ -2,10 +2,20 @@ import { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 import L, { type LatLngBounds } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { ParseResult, LayerState, ResourceData, ResourcePurity, Cave } from '../types';
+import type {
+  ParseResult,
+  LayerState,
+  ResourceData,
+  ResourcePurity,
+  Building,
+  BuildingLine,
+  BuildingCategory,
+  Cave,
+} from '../types';
 import { WORLD_BOUNDS } from '../lib/coordinates';
 import MarkerLayer from './MarkerLayer';
 import ResourceNodeLayer from './ResourceNodeLayer';
+import BuildingLayer from './BuildingLayer';
 import CaveLayer from './CaveLayer';
 import { iconSizeForZoom } from '../lib/markerIcon';
 
@@ -32,6 +42,10 @@ interface Props {
   resourceData: ResourceData | null;
   // Per-layer purity visibility: resourcePurity[layerId][purity].
   resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
+  // Placed buildings (from the parsed save) and which categories are shown.
+  buildings: Building[];
+  buildingLines: BuildingLine[];
+  buildingVisibility: Record<BuildingCategory, boolean>;
   caves: Cave[];
   showCaves: boolean;
   showHeight: boolean;
@@ -62,7 +76,7 @@ function ViewportTracker({
   return null;
 }
 
-export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, caves, showCaves, showHeight }: Props) {
+export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, buildings, buildingLines, buildingVisibility, caves, showCaves, showHeight }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   // Icons grow with zoom; default to the floor size until the map reports its zoom.
   const [zoom, setZoom] = useState<number>(2);
@@ -93,6 +107,10 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
         updateWhenZooming={false}
         updateWhenIdle={true}
       />
+
+      {/* Placed buildings — a single canvas overlay (the overlayPane sits below markers,
+          so collectible/resource markers stay clickable on top). */}
+      <BuildingLayer buildings={buildings} lines={buildingLines} visibility={buildingVisibility} />
 
       {result &&
         layerStates.map((ls) => (
