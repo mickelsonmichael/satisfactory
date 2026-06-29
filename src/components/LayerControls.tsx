@@ -1,7 +1,18 @@
-import { Fragment, useState } from 'react';
-import type { LayerState, CollectibleType, ResourceLayer, ResourcePurity } from '../types';
+import { Fragment, useMemo, useState } from 'react';
+import type {
+  LayerState,
+  CollectibleType,
+  ResourceLayer,
+  ResourcePurity,
+  Building,
+  BuildingLine,
+  BuildingCategory,
+  SaveStats,
+} from '../types';
 import { getCollectibleIconUrl } from '../lib/icons';
+import { BUILDING_CATEGORIES } from '../lib/buildings';
 import FileUpload from './FileUpload';
+import StatsPanel from './StatsPanel';
 
 interface Props {
   layerStates: LayerState[];
@@ -31,7 +42,14 @@ interface Props {
   resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
   onTogglePurity: (id: string, purity: ResourcePurity) => void;
   onSetAllResources: (visible: boolean) => void;
+  buildings: Building[];
+  buildingLines: BuildingLine[];
+  buildingVisibility: Record<BuildingCategory, boolean>;
+  onToggleBuildingCategory: (id: BuildingCategory) => void;
+  onSetAllBuildings: (visible: boolean) => void;
   onFileSelected: (file: File) => void;
+  /** Aggregate stats for the displayed save, or null until one is parsed. */
+  stats: SaveStats | null;
 }
 
 // The set of purities a layer actually contains, so absent ones render no checkbox.
@@ -117,10 +135,33 @@ export default function LayerControls({
   resourcePurity,
   onTogglePurity,
   onSetAllResources,
+  buildings,
+  buildingLines,
+  buildingVisibility,
+  onToggleBuildingCategory,
+  onSetAllBuildings,
   onFileSelected,
+  stats,
 }: Props) {
   const [resourcesExpanded, setResourcesExpanded] = useState(false);
+  const [buildingsExpanded, setBuildingsExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
+  const [tab, setTab] = useState<'filters' | 'stats'>('filters');
+
+  // Count placed buildings + connection lines per category for the section's row labels.
+  const buildingCounts = useMemo(() => {
+    const m = Object.fromEntries(BUILDING_CATEGORIES.map((c) => [c.id, 0])) as Record<
+      BuildingCategory,
+      number
+    >;
+    for (const b of buildings) m[b.category] += 1;
+    for (const ln of buildingLines) m[ln.category] += 1;
+    return m;
+  }, [buildings, buildingLines]);
+
+  const hasBuildings = buildings.length > 0 || buildingLines.length > 0;
+  const buildingsAllVisible =
+    hasBuildings && BUILDING_CATEGORIES.every((c) => buildingVisibility[c.id]);
 
   // "All" is reached when every present purity of every layer is enabled.
   const allVisible =
@@ -194,17 +235,46 @@ export default function LayerControls({
         <NavButton label="▶▶" title="Newest save" disabled={!canGoNewer} onClick={onGoNewest} />
       </div>
 
-      <div
-        style={{
-          borderTop: '1px solid #333',
-          paddingTop: 8,
-          marginBottom: 10,
-          marginTop: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-        }}
-      >
+      {/* Tab strip: switch the body between the layer filters and the stats page. */}
+      <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
+        {(['filters', 'stats'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              flex: 1,
+              background: tab === t ? 'rgba(250,149,73,0.15)' : 'none',
+              border: '1px solid',
+              borderColor: tab === t ? '#FA9549' : '#333',
+              borderRadius: 5,
+              color: tab === t ? '#FA9549' : '#aaa',
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+              padding: '5px 0',
+              textTransform: 'capitalize',
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'stats' && <StatsPanel stats={stats} />}
+
+      {tab === 'filters' && (
+        <>
+        <div
+          style={{
+            borderTop: '1px solid #333',
+            paddingTop: 8,
+            marginBottom: 10,
+            marginTop: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}
+        >
         <label
           style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
         >
@@ -462,6 +532,84 @@ export default function LayerControls({
             </div>
           )}
         </div>
+      )}
+
+      {hasBuildings && (
+        <div style={{ borderTop: '1px solid #333', marginTop: 10, paddingTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => setBuildingsExpanded((v) => !v)}
+              title={buildingsExpanded ? 'Collapse' : 'Expand'}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#888',
+                cursor: 'pointer',
+                fontSize: 11,
+                padding: 0,
+                width: 12,
+                lineHeight: 1,
+              }}
+            >
+              {buildingsExpanded ? '▼' : '▶'}
+            </button>
+            <span
+              style={{ flex: 1, fontWeight: 600, cursor: 'pointer' }}
+              onClick={() => setBuildingsExpanded((v) => !v)}
+            >
+              Buildings
+            </span>
+            <button
+              onClick={() => onSetAllBuildings(!buildingsAllVisible)}
+              style={{
+                background: 'none',
+                border: '1px solid #444',
+                borderRadius: 4,
+                color: '#aaa',
+                cursor: 'pointer',
+                fontSize: 10,
+                padding: '1px 6px',
+              }}
+            >
+              {buildingsAllVisible ? 'None' : 'All'}
+            </button>
+          </div>
+
+          {buildingsExpanded && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 8 }}>
+              {BUILDING_CATEGORIES.map((cat) => (
+                <label
+                  key={cat.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={buildingVisibility[cat.id] ?? false}
+                    onChange={() => onToggleBuildingCategory(cat.id)}
+                    style={{ accentColor: cat.color, width: 14, height: 14 }}
+                  />
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 12,
+                      height: 12,
+                      flexShrink: 0,
+                      borderRadius: 3,
+                      background: cat.color,
+                      opacity: 0.85,
+                    }}
+                  />
+                  <span style={{ flex: 1 }}>{cat.label}</span>
+                  <span style={{ color: '#888', fontSize: 11 }}>
+                    {buildingCounts[cat.id].toLocaleString()}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+        </>
       )}
 
       <div style={{ borderTop: '1px solid #333', marginTop: 'auto', paddingTop: 12 }}>

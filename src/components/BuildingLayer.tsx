@@ -1,0 +1,391 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMap } from 'react-leaflet';
+import L from 'leaflet';
+import type { Building, BuildingLine, BuildingCategory } from '../types';
+import { gameToLatLng } from '../lib/coordinates';
+import { BUILDING_CATEGORIES, humanize } from '../lib/buildings';
+
+interface Props {
+  buildings: Building[];
+  // Spline buildings (belts/pipes/rails) drawn as connected polylines.
+  lines: BuildingLine[];
+  // Which categories are shown. A building draws only when its category is true here.
+  visibility: Record<BuildingCategory, boolean>;
+}
+
+// Fill opacity for footprints — translucent so the terrain reads through the base.
+const FILL_ALPHA = 0.4;
+// Stroke opacity for footprint outlines, only drawn once buildings are large on screen.
+const STROKE_ALPHA = 0.5;
+// Connection lines (belts/pipes) are drawn a touch more opaque so the network reads clearly.
+const LINE_ALPHA = 0.75;
+// Painted back-to-front: structure first, machines last so they sit on top.
+const DRAW_ORDER: BuildingCategory[] = [
+  'foundation',
+  'wall',
+  'logistics',
+  'storage',
+  'power',
+  'vehicle',
+  'misc',
+  'production',
+];
+// Spatial-hash cell size (cm). Larger than any building, so a building only ever falls in
+// the cell of its center for both viewport-culled drawing and hover hit-testing.
+const CELL = 5000;
+// Max building half-extent (cm) — pads the cell sweep so big footprints straddling the
+// viewport edge are still drawn.
+const CELL_PAD = 2500;
+// Level-of-detail: footprints projecting smaller than this (px) are invisible, so skip
+// them entirely. This drops belts/poles/small machines when zoomed out.
+const MIN_DRAW_PX = 0.7;
+// Outlines only help when footprints are reasonably large; below this on-screen size
+// (px for an 8 m foundation) we skip stroking — it is invisible and doubles draw cost.
+const STROKE_MIN_PX = 12;
+// Structural categories carry no interesting per-building stats, so they are excluded
+// from hover hit-testing — hovering them would only ever surface a coordinate.
+const HOVERABLE: Record<BuildingCategory, boolean> = {
+  foundation: false,
+  wall: false,
+  production: true,
+  power: true,
+  logistics: true,
+  storage: true,
+  vehicle: true,
+  misc: true,
+};
+
+const CAT_LABEL: Record<BuildingCategory, string> = Object.fromEntries(
+  BUILDING_CATEGORIES.map((c) => [c.id, c.label]),
+) as Record<BuildingCategory, string>;
+const CAT_COLOR: Record<BuildingCategory, string> = Object.fromEntries(
+  BUILDING_CATEGORIES.map((c) => [c.id, c.color]),
+) as Record<BuildingCategory, string>;
+
+// Building plus its precomputed rotation, so the draw/hit-test loops do no trig.
+interface Prep extends Building {
+  cos: number;
+  sin: number;
+}
+
+// Affine game(x,y) -> container(px,py): [a b c; d e f]. Recomputed each redraw from three
+// reference points, then applied with plain arithmetic so the hot loop makes no Leaflet calls.
+interface Affine {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+}
+
+interface Hover {
+  b: Building;
+  px: number; // building center in container pixels (tooltip is pinned here)
+  py: number;
+}
+
+// Inverse-project a container point back to game coordinates.
+function gameAt(aff: Affine, px: number, py: number): [number, number] {
+  const det = aff.a * aff.e - aff.b * aff.d;
+  const ox = px - aff.c;
+  const oy = py - aff.f;
+  return [(ox * aff.e - oy * aff.b) / det, (-ox * aff.d + oy * aff.a) / det];
+}
+
+// Repaint every visible footprint. Batches each category into a single path filled once —
+// the single biggest win over per-building fill/stroke — and only visits grid cells that
+// overlap the viewport, so a zoomed-in view never iterates the whole base.
+function paint(
+  c: CanvasRenderingContext2D,
+  W: number,
+  H: number,
+  dpr: number,
+  aff: Affine,
+  grid: Map<string, Prep[]>,
+  linesByCat: Record<BuildingCategory, BuildingLine[]>,
+  visibility: Record<BuildingCategory, boolean>,
+): void {
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, W, H);
+  if (!BUILDING_CATEGORIES.some((cat) => visibility[cat.id])) return;
+
+  // On-screen scale (px per cm) along each game axis, for level-of-detail decisions.
+  const sx = Math.hypot(aff.a, aff.d);
+  const sy = Math.hypot(aff.b, aff.e);
+  const scale = Math.max(sx, sy);
+  const minSizeCm = MIN_DRAW_PX / scale; // skip footprints smaller than this
+  const doStroke = 800 * scale >= STROKE_MIN_PX;
+
+  // Game-space bounding box of the viewport (from the four projected-back corners), padded
+  // by the largest building extent, converted to the inclusive grid-cell range to sweep.
+  const corners = [gameAt(aff, 0, 0), gameAt(aff, W, 0), gameAt(aff, 0, H), gameAt(aff, W, H)];
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [gx, gy] of corners) {
+    if (gx < minX) minX = gx;
+    if (gx > maxX) maxX = gx;
+    if (gy < minY) minY = gy;
+    if (gy > maxY) maxY = gy;
+  }
+  const ci0 = Math.floor((minX - CELL_PAD) / CELL);
+  const ci1 = Math.floor((maxX + CELL_PAD) / CELL);
+  const cj0 = Math.floor((minY - CELL_PAD) / CELL);
+  const cj1 = Math.floor((maxY + CELL_PAD) / CELL);
+
+  // One path per visible category; built up cell by cell, then filled/stroked once each.
+  const paths = {} as Record<BuildingCategory, Path2D>;
+  for (const cat of DRAW_ORDER) if (visibility[cat]) paths[cat] = new Path2D();
+
+  for (let i = ci0; i <= ci1; i++) {
+    for (let j = cj0; j <= cj1; j++) {
+      const bucket = grid.get(`${i},${j}`);
+      if (!bucket) continue;
+      for (const p of bucket) {
+        if (!visibility[p.category]) continue;
+        if (p.w < minSizeCm && p.d < minSizeCm) continue; // sub-pixel: invisible
+
+        const hw = p.w / 2;
+        const hd = p.d / 2;
+        // Projected center and the two projected half-edge vectors of the footprint.
+        const cx = aff.a * p.x + aff.b * p.y + aff.c;
+        const cy = aff.d * p.x + aff.e * p.y + aff.f;
+        const exx = (aff.a * p.cos + aff.b * p.sin) * hw;
+        const exy = (aff.d * p.cos + aff.e * p.sin) * hw;
+        const eyx = (aff.b * p.cos - aff.a * p.sin) * hd;
+        const eyy = (aff.e * p.cos - aff.d * p.sin) * hd;
+
+        const path = paths[p.category];
+        path.moveTo(cx - exx - eyx, cy - exy - eyy);
+        path.lineTo(cx + exx - eyx, cy + exy - eyy);
+        path.lineTo(cx + exx + eyx, cy + exy + eyy);
+        path.lineTo(cx - exx + eyx, cy - exy + eyy);
+        path.closePath();
+      }
+    }
+  }
+
+  c.lineWidth = 1;
+  for (const cat of DRAW_ORDER) {
+    const path = paths[cat];
+    if (!path) continue;
+    // Filling the whole category as one path also avoids the seams/over-darkening you get
+    // when thousands of translucent rectangles overlap edge to edge.
+    c.globalAlpha = FILL_ALPHA;
+    c.fillStyle = CAT_COLOR[cat];
+    c.fill(path);
+    if (doStroke) {
+      c.globalAlpha = STROKE_ALPHA;
+      c.strokeStyle = CAT_COLOR[cat];
+      c.stroke(path);
+    }
+  }
+
+  // Connection lines (belts/pipes/rails) drawn on top so the routed network is legible.
+  // One batched path per category, stroked once; viewport-culled per line.
+  const lineW = Math.max(1, Math.min(5, 130 * scale)); // ~1.3 m belt width, clamped
+  c.lineWidth = lineW;
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
+  c.globalAlpha = LINE_ALPHA;
+  const lm = lineW + 2; // cull margin in px
+  for (const cat of DRAW_ORDER) {
+    if (!visibility[cat]) continue;
+    const list = linesByCat[cat];
+    if (!list || list.length === 0) continue;
+    const path = new Path2D();
+    for (const line of list) {
+      const pts = line.pts;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      // Project once, recording the screen bbox so fully-offscreen lines are skipped.
+      const proj: number[] = new Array(pts.length);
+      for (let k = 0; k < pts.length; k += 2) {
+        const gx = pts[k], gy = pts[k + 1];
+        const x = aff.a * gx + aff.b * gy + aff.c;
+        const y = aff.d * gx + aff.e * gy + aff.f;
+        proj[k] = x; proj[k + 1] = y;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+      if (maxX < -lm || minX > W + lm || maxY < -lm || minY > H + lm) continue;
+      path.moveTo(proj[0], proj[1]);
+      for (let k = 2; k < proj.length; k += 2) path.lineTo(proj[k], proj[k + 1]);
+    }
+    c.strokeStyle = CAT_COLOR[cat];
+    c.stroke(path);
+  }
+  c.globalAlpha = 1;
+}
+
+export default function BuildingLayer({ buildings, lines, visibility }: Props) {
+  const map = useMap();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const affineRef = useRef<Affine | null>(null);
+  const visRef = useRef(visibility);
+  const redrawRef = useRef<() => void>(() => {});
+  const hoverIdRef = useRef<Building | null>(null);
+  const [hover, setHover] = useState<Hover | null>(null);
+
+  // Precompute rotation once per save, and index every building into the spatial grid by
+  // its center cell. Both the renderer and the hit-test reuse this single structure.
+  const grid = useMemo(() => {
+    const g = new Map<string, Prep[]>();
+    for (const b of buildings) {
+      const p: Prep = { ...b, cos: Math.cos(b.yaw), sin: Math.sin(b.yaw) };
+      const key = `${Math.floor(b.x / CELL)},${Math.floor(b.y / CELL)}`;
+      const bucket = g.get(key);
+      if (bucket) bucket.push(p);
+      else g.set(key, [p]);
+    }
+    return g;
+  }, [buildings]);
+
+  // Group connection lines by category so the renderer strokes each category in one batch.
+  const linesByCat = useMemo(() => {
+    const m = {
+      foundation: [], wall: [], production: [], power: [],
+      logistics: [], storage: [], vehicle: [], misc: [],
+    } as Record<BuildingCategory, BuildingLine[]>;
+    for (const ln of lines) m[ln.category].push(ln);
+    return m;
+  }, [lines]);
+
+  useEffect(() => {
+    visRef.current = visibility;
+  }, [visibility]);
+
+  useEffect(() => {
+    const canvas = L.DomUtil.create('canvas', 'sf-building-canvas') as HTMLCanvasElement;
+    canvas.style.position = 'absolute';
+    canvas.style.pointerEvents = 'none'; // never steal map drags / marker clicks
+    canvas.style.left = '0';
+    canvas.style.top = '0';
+    map.getPanes().overlayPane.appendChild(canvas);
+    canvasRef.current = canvas;
+
+    // Pin the canvas to the top-left of the viewport (in layer coords) so it pans with the
+    // map between redraws, then draw every footprint in container-pixel space.
+    function reset() {
+      const size = map.getSize();
+      const topLeft = map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(canvas, topLeft);
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = size.x * dpr;
+      canvas.height = size.y * dpr;
+      canvas.style.width = `${size.x}px`;
+      canvas.style.height = `${size.y}px`;
+
+      // Build the affine from three non-collinear game reference points.
+      const ref = (gx: number, gy: number) => {
+        const [lat, lng] = gameToLatLng(gx, gy);
+        return map.latLngToContainerPoint([lat, lng]);
+      };
+      const S = 100000;
+      const p0 = ref(0, 0);
+      const pX = ref(S, 0);
+      const pY = ref(0, S);
+      affineRef.current = {
+        a: (pX.x - p0.x) / S,
+        d: (pX.y - p0.y) / S,
+        b: (pY.x - p0.x) / S,
+        e: (pY.y - p0.y) / S,
+        c: p0.x,
+        f: p0.y,
+      };
+      const ctx = canvas.getContext('2d');
+      if (ctx) paint(ctx, size.x, size.y, dpr, affineRef.current, grid, linesByCat, visRef.current);
+    }
+    redrawRef.current = reset;
+
+    // Hover: find the smallest hoverable building under the cursor (a machine wins over the
+    // foundation beneath it). The tooltip is pinned to the building center and only updates
+    // when the hovered building changes, so moving the mouse doesn't re-render every frame.
+    function onMove(e: L.LeafletMouseEvent) {
+      const aff = affineRef.current;
+      if (!aff) return;
+      const [gx, gy] = gameAt(aff, e.containerPoint.x, e.containerPoint.y);
+      const vis = visRef.current;
+      const ci = Math.floor(gx / CELL);
+      const cj = Math.floor(gy / CELL);
+      let best: Prep | null = null;
+      let bestArea = Infinity;
+      for (let i = ci - 1; i <= ci + 1; i++) {
+        for (let j = cj - 1; j <= cj + 1; j++) {
+          const bucket = grid.get(`${i},${j}`);
+          if (!bucket) continue;
+          for (const b of bucket) {
+            if (!vis[b.category] || !HOVERABLE[b.category]) continue;
+            const dx = gx - b.x;
+            const dy = gy - b.y;
+            const lx = dx * b.cos + dy * b.sin;
+            const ly = -dx * b.sin + dy * b.cos;
+            if (Math.abs(lx) <= b.w / 2 && Math.abs(ly) <= b.d / 2) {
+              const area = b.w * b.d;
+              if (area < bestArea) { bestArea = area; best = b; }
+            }
+          }
+        }
+      }
+      if (best === hoverIdRef.current) return; // same building (or still nothing) — no churn
+      hoverIdRef.current = best;
+      if (!best) {
+        setHover(null);
+      } else {
+        const px = aff.a * best.x + aff.b * best.y + aff.c;
+        const py = aff.d * best.x + aff.e * best.y + aff.f;
+        setHover({ b: best, px, py });
+      }
+    }
+
+    const clear = () => {
+      hoverIdRef.current = null;
+      setHover(null);
+    };
+
+    map.on('moveend zoomend resize', reset);
+    map.on('mousemove', onMove);
+    map.on('mouseout', clear);
+    reset();
+
+    return () => {
+      map.off('moveend zoomend resize', reset);
+      map.off('mousemove', onMove);
+      map.off('mouseout', clear);
+      canvas.remove();
+      canvasRef.current = null;
+      redrawRef.current = () => {};
+    };
+  }, [map, grid, linesByCat]);
+
+  // Repaint when the visible categories change (no map event fires for this).
+  useEffect(() => {
+    redrawRef.current();
+  }, [visibility]);
+
+  if (!hover) return null;
+  const { b } = hover;
+  return (
+    <div
+      className="sf-building-tip"
+      style={{ left: hover.px + 14, top: hover.py + 14, borderColor: CAT_COLOR[b.category] }}
+    >
+      <div className="sf-pop-title" style={{ color: CAT_COLOR[b.category] }}>
+        {humanize(b.cls)}
+      </div>
+      <div className="sf-building-tip-cat">{CAT_LABEL[b.category]}</div>
+      {b.recipe && (
+        <div className="sf-building-tip-recipe">
+          <span>Recipe</span> {b.recipe}
+        </div>
+      )}
+      <dl className="sf-pop-coords">
+        <dt>X</dt>
+        <dd>{Math.round(b.x / 100)} m</dd>
+        <dt>Y</dt>
+        <dd>{Math.round(b.y / 100)} m</dd>
+        <dt>Z</dt>
+        <dd>{Math.round(b.z / 100)} m</dd>
+      </dl>
+    </div>
+  );
+}

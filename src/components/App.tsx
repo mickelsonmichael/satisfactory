@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useManifest, saveUrl } from '../hooks/useManifest';
 import { useSaveParser } from '../hooks/useSaveParser';
 import { LAYER_DEFAULTS } from '../lib/collectibles';
+import { BUILDING_CATEGORIES } from '../lib/buildings';
 import {
   loadVisibleCollectibles,
   saveVisibleCollectibles,
   loadResourcePurity,
   saveResourcePurity,
+  loadBuildingVisibility,
+  saveBuildingVisibility,
   loadShowCaves,
   saveShowCaves,
   loadShowHeight,
@@ -17,6 +20,9 @@ import {
 import type {
   LayerState,
   CollectibleType,
+  Building,
+  BuildingLine,
+  BuildingCategory,
   StaticCollectibles,
   StaticMarker,
   ResourceData,
@@ -31,6 +37,10 @@ import LoadingOverlay from './LoadingOverlay';
 // How often auto-refresh re-checks the manifest for a newer save.
 const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
+// Stable empty arrays used before a save loads, so building prop references stay constant.
+const EMPTY_BUILDINGS: Building[] = [];
+const EMPTY_LINES: BuildingLine[] = [];
+
 function initLayerStates(): LayerState[] {
   // Restore which collectible layers were visible on a previous visit, if any.
   const saved = loadVisibleCollectibles();
@@ -40,6 +50,14 @@ function initLayerStates(): LayerState[] {
     uncollectedCount: 0,
     collectedCount: 0,
   }));
+}
+
+function initBuildingVisibility(): Record<BuildingCategory, boolean> {
+  // Every category defaults OFF (buildings are dense); restore saved selections if any.
+  const saved = loadBuildingVisibility();
+  return Object.fromEntries(
+    BUILDING_CATEGORIES.map((c) => [c.id, saved?.[c.id] ?? false]),
+  ) as Record<BuildingCategory, boolean>;
 }
 
 export default function App() {
@@ -57,6 +75,9 @@ export default function App() {
   const [showCaves, setShowCaves] = useState<boolean>(loadShowCaves);
   const [showHeight, setShowHeight] = useState<boolean>(loadShowHeight);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(loadAutoRefresh);
+  const [buildingVisibility, setBuildingVisibility] = useState<Record<BuildingCategory, boolean>>(
+    initBuildingVisibility,
+  );
   // Per-layer purity visibility: resourcePurity[layerId][purity]. A marker shows when its
   // layer's entry for its own purity is true. Default all off to avoid clutter.
   const [resourcePurity, setResourcePurity] = useState<
@@ -202,6 +223,10 @@ export default function App() {
     saveAutoRefresh(autoRefresh);
   }, [autoRefresh]);
 
+  useEffect(() => {
+    saveBuildingVisibility(buildingVisibility);
+  }, [buildingVisibility]);
+
   function markCollected(id: string) {
     setLocalCollected((prev) => new Set(prev).add(id));
   }
@@ -227,6 +252,19 @@ export default function App() {
     );
   }
 
+  function toggleBuildingCategory(id: BuildingCategory) {
+    setBuildingVisibility((prev) => ({ ...prev, [id]: !prev[id] }));
+  }
+
+  function setAllBuildings(visible: boolean) {
+    setBuildingVisibility((prev) =>
+      Object.fromEntries(Object.keys(prev).map((id) => [id, visible])) as Record<
+        BuildingCategory,
+        boolean
+      >,
+    );
+  }
+
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', background: '#000' }}>
       <LoadingOverlay visible={loading || manifestLoading} progress={progress} message={progressMsg} />
@@ -239,6 +277,9 @@ export default function App() {
         onMarkCollected={markCollected}
         resourceData={resourceData}
         resourcePurity={resourcePurity}
+        buildings={result?.buildings ?? EMPTY_BUILDINGS}
+        buildingLines={result?.buildingLines ?? EMPTY_LINES}
+        buildingVisibility={buildingVisibility}
         caves={caves}
         showCaves={showCaves}
         showHeight={showHeight}
@@ -269,7 +310,13 @@ export default function App() {
         resourcePurity={resourcePurity}
         onTogglePurity={toggleResourcePurity}
         onSetAllResources={setAllResources}
+        buildings={result?.buildings ?? EMPTY_BUILDINGS}
+        buildingLines={result?.buildingLines ?? EMPTY_LINES}
+        buildingVisibility={buildingVisibility}
+        onToggleBuildingCategory={toggleBuildingCategory}
+        onSetAllBuildings={setAllBuildings}
         onFileSelected={setUploadedFile}
+        stats={result?.stats ?? null}
       />
 
       {error && (

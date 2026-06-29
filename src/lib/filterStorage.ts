@@ -2,15 +2,17 @@
 // to localStorage so they survive page refreshes. Intentionally does NOT persist
 // the "marked"/"unmarked" collected state — only the filter selections.
 
-import type { CollectibleType, ResourcePurity } from '../types';
+import type { BuildingCategory, CollectibleType, ResourcePurity } from '../types';
 
 const COLLECTIBLE_KEY = 'satisfactory-map:collectible-filters';
 const RESOURCE_KEY = 'satisfactory-map:resource-filters';
+const BUILDING_KEY = 'satisfactory-map:building-filters';
 const CAVES_KEY = 'satisfactory-map:show-caves';
 const HEIGHT_KEY = 'satisfactory-map:show-height';
 const AUTO_REFRESH_KEY = 'satisfactory-map:auto-refresh';
 
 type ResourcePurityState = Record<string, Record<ResourcePurity, boolean>>;
+type BuildingVisibility = Partial<Record<BuildingCategory, boolean>>;
 
 function read<T>(key: string): T | null {
   try {
@@ -48,6 +50,16 @@ export function loadResourcePurity(): ResourcePurityState | null {
 
 export function saveResourcePurity(state: ResourcePurityState): void {
   write(RESOURCE_KEY, state);
+}
+
+// --- Building category visibility (per-category on/off; default all off) ---
+
+export function loadBuildingVisibility(): BuildingVisibility | null {
+  return read<BuildingVisibility>(BUILDING_KEY);
+}
+
+export function saveBuildingVisibility(state: BuildingVisibility): void {
+  write(BUILDING_KEY, state);
 }
 
 // --- Caves overlay visibility (single boolean toggle) ---
