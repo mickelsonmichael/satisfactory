@@ -11,6 +11,7 @@ import type {
   BuildingLine,
   BuildingCategory,
   Cave,
+  EfficiencyResult,
 } from '../types';
 import { WORLD_BOUNDS } from '../lib/coordinates';
 import MarkerLayer from './MarkerLayer';
@@ -49,6 +50,11 @@ interface Props {
   caves: Cave[];
   showCaves: boolean;
   showHeight: boolean;
+  // Efficiency analysis (null unless the toggle is on): drives footprint coloring + click.
+  efficiency: Record<string, EfficiencyResult> | null;
+  showEfficiency: boolean;
+  selectedBuildingId: string | null;
+  onSelectBuilding: (id: string | null) => void;
 }
 
 // Reports the visible bounds and zoom after the map settles so MarkerLayer can cull
@@ -76,7 +82,7 @@ function ViewportTracker({
   return null;
 }
 
-export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, buildings, buildingLines, buildingVisibility, caves, showCaves, showHeight }: Props) {
+export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, buildings, buildingLines, buildingVisibility, caves, showCaves, showHeight, efficiency, showEfficiency, selectedBuildingId, onSelectBuilding }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   // Icons grow with zoom; default to the floor size until the map reports its zoom.
   const [zoom, setZoom] = useState<number>(2);
@@ -110,7 +116,15 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
 
       {/* Placed buildings — a single canvas overlay (the overlayPane sits below markers,
           so collectible/resource markers stay clickable on top). */}
-      <BuildingLayer buildings={buildings} lines={buildingLines} visibility={buildingVisibility} />
+      <BuildingLayer
+        buildings={buildings}
+        lines={buildingLines}
+        visibility={buildingVisibility}
+        efficiency={efficiency}
+        showEfficiency={showEfficiency}
+        selectedId={selectedBuildingId}
+        onSelect={onSelectBuilding}
+      />
 
       {result &&
         layerStates.map((ls) => (

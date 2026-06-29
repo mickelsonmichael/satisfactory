@@ -8,11 +8,15 @@ import type {
   BuildingLine,
   BuildingCategory,
   SaveStats,
+  EfficiencyReport,
+  EfficiencyResult,
 } from '../types';
 import { getCollectibleIconUrl } from '../lib/icons';
-import { BUILDING_CATEGORIES } from '../lib/buildings';
+import { BUILDING_CATEGORIES, humanize } from '../lib/buildings';
+import { headlineUtil, STATUS_COLOR, utilColor } from '../lib/efficiencyDisplay';
 import FileUpload from './FileUpload';
 import StatsPanel from './StatsPanel';
+import EfficiencyPanel from './EfficiencyPanel';
 
 interface Props {
   layerStates: LayerState[];
@@ -50,6 +54,13 @@ interface Props {
   onFileSelected: (file: File) => void;
   /** Aggregate stats for the displayed save, or null until one is parsed. */
   stats: SaveStats | null;
+  /** Efficiency analysis toggle (heavy flow trace) + its result and selection. */
+  showEfficiency: boolean;
+  onToggleEfficiency: () => void;
+  efficiency: EfficiencyReport | null;
+  selectedResult: EfficiencyResult | null;
+  onSelectBuilding: (id: string | null) => void;
+  onCloseSelected: () => void;
 }
 
 // The set of purities a layer actually contains, so absent ones render no checkbox.
@@ -142,11 +153,17 @@ export default function LayerControls({
   onSetAllBuildings,
   onFileSelected,
   stats,
+  showEfficiency,
+  onToggleEfficiency,
+  efficiency,
+  selectedResult,
+  onSelectBuilding,
+  onCloseSelected,
 }: Props) {
   const [resourcesExpanded, setResourcesExpanded] = useState(false);
   const [buildingsExpanded, setBuildingsExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
-  const [tab, setTab] = useState<'filters' | 'stats'>('filters');
+  const [tab, setTab] = useState<'filters' | 'stats' | 'efficiency'>('filters');
 
   // Count placed buildings + connection lines per category for the section's row labels.
   const buildingCounts = useMemo(() => {
@@ -235,9 +252,16 @@ export default function LayerControls({
         <NavButton label="▶▶" title="Newest save" disabled={!canGoNewer} onClick={onGoNewest} />
       </div>
 
-      {/* Tab strip: switch the body between the layer filters and the stats page. */}
+      {/* Selected-building efficiency detail (shown above the tabs, on any tab). */}
+      {selectedResult && (
+        <div style={{ marginTop: 10 }}>
+          <EfficiencyPanel result={selectedResult} onSelect={onSelectBuilding} onClose={onCloseSelected} />
+        </div>
+      )}
+
+      {/* Tab strip: switch the body between filters, stats and the efficiency report. */}
       <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
-        {(['filters', 'stats'] as const).map((t) => (
+        {(['filters', 'stats', 'efficiency'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -261,6 +285,15 @@ export default function LayerControls({
       </div>
 
       {tab === 'stats' && <StatsPanel stats={stats} />}
+
+      {tab === 'efficiency' && (
+        <EfficiencyReportView
+          showEfficiency={showEfficiency}
+          report={efficiency}
+          selectedId={selectedResult?.id ?? null}
+          onSelect={onSelectBuilding}
+        />
+      )}
 
       {tab === 'filters' && (
         <>
@@ -326,6 +359,19 @@ export default function LayerControls({
             style={{ accentColor: '#FA9549', width: 14, height: 14 }}
           />
           <span style={{ color: '#888', fontSize: 12 }}>Auto-refresh (15 min)</span>
+        </label>
+
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+          title="Trace every conveyor & pipe network and estimate item flow to find bottlenecks. Colors machines by utilization and enables the Efficiency tab — a heavy step that can take a moment on large saves."
+        >
+          <input
+            type="checkbox"
+            checked={showEfficiency}
+            onChange={onToggleEfficiency}
+            style={{ accentColor: '#FA9549', width: 14, height: 14 }}
+          />
+          <span style={{ color: '#888', fontSize: 12 }}>Show efficiency ⚠</span>
         </label>
       </div>
 
@@ -615,6 +661,126 @@ export default function LayerControls({
       <div style={{ borderTop: '1px solid #333', marginTop: 'auto', paddingTop: 12 }}>
         <FileUpload onFileSelected={onFileSelected} />
       </div>
+    </div>
+  );
+}
+
+// Maximum number of ranked machines to list — the worst offenders are what matter, and a
+// few dozen rows keeps the panel responsive.
+const REPORT_LIMIT = 100;
+
+function EfficiencyReportView({
+  showEfficiency,
+  report,
+  selectedId,
+  onSelect,
+}: {
+  showEfficiency: boolean;
+  report: EfficiencyReport | null;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (!showEfficiency) {
+    return (
+      <div style={{ color: '#888', fontSize: 12, padding: '12px 0', lineHeight: 1.5 }}>
+        Enable <strong style={{ color: '#bbb' }}>Show efficiency</strong> in the Filters tab to
+        trace conveyor &amp; pipe networks and rank your least-utilized miners and factories.
+      </div>
+    );
+  }
+  if (!report) {
+    return <div style={{ color: '#888', fontSize: 12, padding: '12px 0' }}>Analyzing factory…</div>;
+  }
+
+  const { summary } = report;
+  return (
+    <div style={{ paddingTop: 6 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 6,
+          marginBottom: 10,
+          fontSize: 12,
+        }}
+      >
+        <Stat label="Machines" value={summary.machines} />
+        <Stat label="Underutilized" value={summary.underutilized} color="#f2c14e" />
+        <Stat label="Starved" value={summary.starved} color={STATUS_COLOR.starved} />
+        <Stat label="Blocked" value={summary.blocked} color={STATUS_COLOR.blocked} />
+      </div>
+
+      <div style={{ color: '#666', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+        Least utilized
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {report.ranked.slice(0, REPORT_LIMIT).map((id) => {
+          const r = report.results[id];
+          const util = Math.round(headlineUtil(r) * 100);
+          const active = id === selectedId;
+          return (
+            <button
+              key={id}
+              onClick={() => onSelect(id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                textAlign: 'left',
+                background: active ? 'rgba(250,149,73,0.15)' : 'none',
+                border: '1px solid',
+                borderColor: active ? '#FA9549' : 'transparent',
+                borderRadius: 4,
+                color: '#ccc',
+                cursor: 'pointer',
+                padding: '4px 6px',
+                fontSize: 12,
+              }}
+            >
+              <span
+                aria-hidden
+                title={r.status}
+                style={{ width: 8, height: 8, flexShrink: 0, borderRadius: 2, background: STATUS_COLOR[r.status] }}
+              />
+              <span style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {humanize(r.cls)}
+                </span>
+                {(r.recipeName || r.item) && (
+                  <span
+                    style={{
+                      display: 'block',
+                      color: '#777',
+                      fontSize: 10.5,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {r.recipeName ?? r.item}
+                  </span>
+                )}
+              </span>
+              <span style={{ flexShrink: 0, fontWeight: 700, color: utilColor(headlineUtil(r)) }}>{util}%</span>
+            </button>
+          );
+        })}
+      </div>
+      {report.ranked.length > REPORT_LIMIT && (
+        <div style={{ color: '#666', fontSize: 11, marginTop: 8 }}>
+          +{report.ranked.length - REPORT_LIMIT} more…
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, color }: { label: string; value: number; color?: string }) {
+  return (
+    <div style={{ border: '1px solid #333', borderRadius: 5, padding: '5px 8px' }}>
+      <div style={{ color: color ?? '#fff', fontWeight: 700, fontSize: 16 }}>{value.toLocaleString()}</div>
+      <div style={{ color: '#888', fontSize: 10.5 }}>{label}</div>
     </div>
   );
 }

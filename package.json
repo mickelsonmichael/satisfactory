@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "generate-manifest": "node scripts/generate-manifest.js",
     "generate-resource-nodes": "node scripts/generate-resource-nodes.mjs",
+    "generate-recipes": "node scripts/generate-recipes.mjs",
     "download-resource-icons": "node scripts/download-resource-icons.mjs",
     "download-collectible-icons": "node scripts/download-collectible-icons.mjs"
   },

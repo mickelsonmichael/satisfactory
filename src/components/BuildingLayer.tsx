@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import type { Building, BuildingLine, BuildingCategory } from '../types';
+import type { Building, BuildingLine, BuildingCategory, EfficiencyResult } from '../types';
 import { gameToLatLng } from '../lib/coordinates';
 import { BUILDING_CATEGORIES, humanize } from '../lib/buildings';
+import { headlineUtil, STATUS_COLOR, STATUS_LABEL, utilColor } from '../lib/efficiencyDisplay';
 
 interface Props {
   buildings: Building[];
@@ -11,6 +12,11 @@ interface Props {
   lines: BuildingLine[];
   // Which categories are shown. A building draws only when its category is true here.
   visibility: Record<BuildingCategory, boolean>;
+  // Efficiency results keyed by building id (null unless the toggle is on).
+  efficiency: Record<string, EfficiencyResult> | null;
+  showEfficiency: boolean;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
 }
 
 // Fill opacity for footprints — translucent so the terrain reads through the base.
@@ -19,6 +25,8 @@ const FILL_ALPHA = 0.4;
 const STROKE_ALPHA = 0.5;
 // Connection lines (belts/pipes) are drawn a touch more opaque so the network reads clearly.
 const LINE_ALPHA = 0.75;
+// Color for a production machine with no efficiency result (e.g. idle, unmodelled).
+const EFF_MISSING = '#6b7280';
 // Painted back-to-front: structure first, machines last so they sit on top.
 const DRAW_ORDER: BuildingCategory[] = [
   'foundation',
@@ -85,6 +93,14 @@ interface Hover {
   py: number;
 }
 
+// Efficiency coloring state passed into paint (kept in a single object to avoid a long
+// parameter list).
+interface EffView {
+  results: Record<string, EfficiencyResult> | null;
+  show: boolean;
+  selected: Prep | null;
+}
+
 // Inverse-project a container point back to game coordinates.
 function gameAt(aff: Affine, px: number, py: number): [number, number] {
   const det = aff.a * aff.e - aff.b * aff.d;
@@ -93,7 +109,34 @@ function gameAt(aff: Affine, px: number, py: number): [number, number] {
   return [(ox * aff.e - oy * aff.b) / det, (-ox * aff.d + oy * aff.a) / det];
 }
 
-// Repaint every visible footprint. Batches each category into a single path filled once —
+// The fill color for a footprint: utilization tier when efficiency coloring is on and the
+// building is a machine with a result, otherwise its category color.
+function fillColor(p: Prep, eff: EffView): string {
+  if (eff.show && p.category === 'production') {
+    const r = p.id ? eff.results?.[p.id] : undefined;
+    return r ? utilColor(headlineUtil(r)) : EFF_MISSING;
+  }
+  return CAT_COLOR[p.category];
+}
+
+// Append a footprint's rotated rectangle to a Path2D, given the affine + half-extents.
+function addRect(path: Path2D, aff: Affine, p: Prep): void {
+  const hw = p.w / 2;
+  const hd = p.d / 2;
+  const cx = aff.a * p.x + aff.b * p.y + aff.c;
+  const cy = aff.d * p.x + aff.e * p.y + aff.f;
+  const exx = (aff.a * p.cos + aff.b * p.sin) * hw;
+  const exy = (aff.d * p.cos + aff.e * p.sin) * hw;
+  const eyx = (aff.b * p.cos - aff.a * p.sin) * hd;
+  const eyy = (aff.e * p.cos - aff.d * p.sin) * hd;
+  path.moveTo(cx - exx - eyx, cy - exy - eyy);
+  path.lineTo(cx + exx - eyx, cy + exy - eyy);
+  path.lineTo(cx + exx + eyx, cy + exy + eyy);
+  path.lineTo(cx - exx + eyx, cy - exy + eyy);
+  path.closePath();
+}
+
+// Repaint every visible footprint. Batches each fill color into a single path filled once —
 // the single biggest win over per-building fill/stroke — and only visits grid cells that
 // overlap the viewport, so a zoomed-in view never iterates the whole base.
 function paint(
@@ -105,6 +148,7 @@ function paint(
   grid: Map<string, Prep[]>,
   linesByCat: Record<BuildingCategory, BuildingLine[]>,
   visibility: Record<BuildingCategory, boolean>,
+  eff: EffView,
 ): void {
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, W, H);
@@ -132,9 +176,12 @@ function paint(
   const cj0 = Math.floor((minY - CELL_PAD) / CELL);
   const cj1 = Math.floor((maxY + CELL_PAD) / CELL);
 
-  // One path per visible category; built up cell by cell, then filled/stroked once each.
+  // One path per category; production splits into per-tier-color paths when efficiency
+  // coloring is on (keyed by color string), preserving the category draw order.
   const paths = {} as Record<BuildingCategory, Path2D>;
   for (const cat of DRAW_ORDER) if (visibility[cat]) paths[cat] = new Path2D();
+  const prodTier = new Map<string, Path2D>();
+  const prodOn = eff.show && visibility.production;
 
   for (let i = ci0; i <= ci1; i++) {
     for (let j = cj0; j <= cj1; j++) {
@@ -143,29 +190,21 @@ function paint(
       for (const p of bucket) {
         if (!visibility[p.category]) continue;
         if (p.w < minSizeCm && p.d < minSizeCm) continue; // sub-pixel: invisible
-
-        const hw = p.w / 2;
-        const hd = p.d / 2;
-        // Projected center and the two projected half-edge vectors of the footprint.
-        const cx = aff.a * p.x + aff.b * p.y + aff.c;
-        const cy = aff.d * p.x + aff.e * p.y + aff.f;
-        const exx = (aff.a * p.cos + aff.b * p.sin) * hw;
-        const exy = (aff.d * p.cos + aff.e * p.sin) * hw;
-        const eyx = (aff.b * p.cos - aff.a * p.sin) * hd;
-        const eyy = (aff.e * p.cos - aff.d * p.sin) * hd;
-
-        const path = paths[p.category];
-        path.moveTo(cx - exx - eyx, cy - exy - eyy);
-        path.lineTo(cx + exx - eyx, cy + exy - eyy);
-        path.lineTo(cx + exx + eyx, cy + exy + eyy);
-        path.lineTo(cx - exx + eyx, cy - exy + eyy);
-        path.closePath();
+        if (prodOn && p.category === 'production') {
+          const col = fillColor(p, eff);
+          let path = prodTier.get(col);
+          if (!path) prodTier.set(col, (path = new Path2D()));
+          addRect(path, aff, p);
+        } else {
+          addRect(paths[p.category], aff, p);
+        }
       }
     }
   }
 
   c.lineWidth = 1;
   for (const cat of DRAW_ORDER) {
+    if (prodOn && cat === 'production') continue; // drawn as tier buckets below
     const path = paths[cat];
     if (!path) continue;
     // Filling the whole category as one path also avoids the seams/over-darkening you get
@@ -177,6 +216,19 @@ function paint(
       c.globalAlpha = STROKE_ALPHA;
       c.strokeStyle = CAT_COLOR[cat];
       c.stroke(path);
+    }
+  }
+  // Production machines colored by efficiency tier, more opaque so the status reads clearly.
+  if (prodOn) {
+    for (const [col, path] of prodTier) {
+      c.globalAlpha = 0.6;
+      c.fillStyle = col;
+      c.fill(path);
+      if (doStroke) {
+        c.globalAlpha = 0.7;
+        c.strokeStyle = col;
+        c.stroke(path);
+      }
     }
   }
 
@@ -214,9 +266,33 @@ function paint(
     c.stroke(path);
   }
   c.globalAlpha = 1;
+
+  // Selection highlight — a bright outline (plus a slightly larger halo) around the picked
+  // building so it stands out against the tier coloring.
+  if (eff.selected) {
+    const ring = new Path2D();
+    addRect(ring, aff, eff.selected);
+    c.lineJoin = 'round';
+    c.globalAlpha = 1;
+    c.lineWidth = 3;
+    c.strokeStyle = '#000';
+    c.stroke(ring);
+    c.lineWidth = 1.5;
+    c.strokeStyle = '#fff';
+    c.stroke(ring);
+    c.globalAlpha = 1;
+  }
 }
 
-export default function BuildingLayer({ buildings, lines, visibility }: Props) {
+export default function BuildingLayer({
+  buildings,
+  lines,
+  visibility,
+  efficiency,
+  showEfficiency,
+  selectedId,
+  onSelect,
+}: Props) {
   const map = useMap();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const affineRef = useRef<Affine | null>(null);
@@ -239,6 +315,13 @@ export default function BuildingLayer({ buildings, lines, visibility }: Props) {
     return g;
   }, [buildings]);
 
+  // id -> Prep, for resolving the selected building (highlight) without scanning the grid.
+  const prepById = useMemo(() => {
+    const m = new Map<string, Prep>();
+    for (const bucket of grid.values()) for (const p of bucket) if (p.id) m.set(p.id, p);
+    return m;
+  }, [grid]);
+
   // Group connection lines by category so the renderer strokes each category in one batch.
   const linesByCat = useMemo(() => {
     const m = {
@@ -248,6 +331,14 @@ export default function BuildingLayer({ buildings, lines, visibility }: Props) {
     for (const ln of lines) m[ln.category].push(ln);
     return m;
   }, [lines]);
+
+  // Live refs so the map-event handlers (registered once) always read the latest props.
+  const effRef = useRef<EffView>({ results: efficiency, show: showEfficiency, selected: null });
+  effRef.current = {
+    results: efficiency,
+    show: showEfficiency,
+    selected: selectedId ? (prepById.get(selectedId) ?? null) : null,
+  };
 
   useEffect(() => {
     visRef.current = visibility;
@@ -293,17 +384,17 @@ export default function BuildingLayer({ buildings, lines, visibility }: Props) {
         f: p0.y,
       };
       const ctx = canvas.getContext('2d');
-      if (ctx) paint(ctx, size.x, size.y, dpr, affineRef.current, grid, linesByCat, visRef.current);
+      if (ctx)
+        paint(ctx, size.x, size.y, dpr, affineRef.current, grid, linesByCat, visRef.current, effRef.current);
     }
     redrawRef.current = reset;
 
-    // Hover: find the smallest hoverable building under the cursor (a machine wins over the
-    // foundation beneath it). The tooltip is pinned to the building center and only updates
-    // when the hovered building changes, so moving the mouse doesn't re-render every frame.
-    function onMove(e: L.LeafletMouseEvent) {
+    // Pick the smallest hoverable building under a container point (a machine wins over the
+    // foundation beneath it).
+    function pick(cx: number, cy: number): Prep | null {
       const aff = affineRef.current;
-      if (!aff) return;
-      const [gx, gy] = gameAt(aff, e.containerPoint.x, e.containerPoint.y);
+      if (!aff) return null;
+      const [gx, gy] = gameAt(aff, cx, cy);
       const vis = visRef.current;
       const ci = Math.floor(gx / CELL);
       const cj = Math.floor(gy / CELL);
@@ -326,6 +417,15 @@ export default function BuildingLayer({ buildings, lines, visibility }: Props) {
           }
         }
       }
+      return best;
+    }
+
+    // Hover: the tooltip is pinned to the building center and only updates when the hovered
+    // building changes, so moving the mouse doesn't re-render every frame.
+    function onMove(e: L.LeafletMouseEvent) {
+      const aff = affineRef.current;
+      if (!aff) return;
+      const best = pick(e.containerPoint.x, e.containerPoint.y);
       if (best === hoverIdRef.current) return; // same building (or still nothing) — no churn
       hoverIdRef.current = best;
       if (!best) {
@@ -337,6 +437,12 @@ export default function BuildingLayer({ buildings, lines, visibility }: Props) {
       }
     }
 
+    // Click: select the machine under the cursor (or clear selection on empty ground).
+    function onClick(e: L.LeafletMouseEvent) {
+      const best = pick(e.containerPoint.x, e.containerPoint.y);
+      onSelect(best?.id ?? null);
+    }
+
     const clear = () => {
       hoverIdRef.current = null;
       setHover(null);
@@ -345,25 +451,28 @@ export default function BuildingLayer({ buildings, lines, visibility }: Props) {
     map.on('moveend zoomend resize', reset);
     map.on('mousemove', onMove);
     map.on('mouseout', clear);
+    map.on('click', onClick);
     reset();
 
     return () => {
       map.off('moveend zoomend resize', reset);
       map.off('mousemove', onMove);
       map.off('mouseout', clear);
+      map.off('click', onClick);
       canvas.remove();
       canvasRef.current = null;
       redrawRef.current = () => {};
     };
-  }, [map, grid, linesByCat]);
+  }, [map, grid, linesByCat, onSelect]);
 
-  // Repaint when the visible categories change (no map event fires for this).
+  // Repaint when visibility or efficiency state changes (no map event fires for these).
   useEffect(() => {
     redrawRef.current();
-  }, [visibility]);
+  }, [visibility, efficiency, showEfficiency, selectedId]);
 
   if (!hover) return null;
   const { b } = hover;
+  const eff = showEfficiency && b.id ? efficiency?.[b.id] : undefined;
   return (
     <div
       className="sf-building-tip"
@@ -376,6 +485,12 @@ export default function BuildingLayer({ buildings, lines, visibility }: Props) {
       {b.recipe && (
         <div className="sf-building-tip-recipe">
           <span>Recipe</span> {b.recipe}
+        </div>
+      )}
+      {eff && (
+        <div className="sf-building-tip-recipe">
+          <span style={{ color: STATUS_COLOR[eff.status] }}>{STATUS_LABEL[eff.status]}</span>{' '}
+          {Math.round(headlineUtil(eff) * 100)}% utilized
         </div>
       )}
       <dl className="sf-pop-coords">

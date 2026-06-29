@@ -1,6 +1,7 @@
 import { Parser } from '@etothepii/satisfactory-file-parser';
 import type { Building, BuildingLine, CollectibleMarker, ParseResult, StaticMarker } from '../types';
 import { computeStats } from './stats';
+import { buildFactoryGraph } from './factoryGraph';
 import { classify, footprintFor, humanizeRecipe, shortClass } from './buildings';
 
 interface Vec3 {
@@ -186,6 +187,8 @@ export async function parseSaveFile(
             w,
             d,
             recipe: recipePath ? humanizeRecipe(recipePath) : undefined,
+            // Keep the actor id so a clicked footprint can find its FactoryGraph node.
+            id: o.instanceName,
           });
         }
       }
@@ -235,6 +238,7 @@ export async function parseSaveFile(
     claimedNodes,
     buildings,
     buildingLines,
+    factory: buildFactoryGraph(levels as unknown as Parameters<typeof buildFactoryGraph>[0]),
     sessionName: header.sessionName ?? header.mapName ?? '',
     saveVersion: header.saveVersion ?? 0,
     stats: computeStats(

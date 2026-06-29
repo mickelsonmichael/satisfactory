@@ -100,6 +100,10 @@ export interface Building {
   w: number;               // footprint width (cm) along local X before rotation
   d: number;               // footprint depth (cm) along local Y before rotation
   recipe?: string;         // humanized recipe name (machines only)
+  // Actor instanceName, set only for full Build_* objects (machines/extractors/etc.) —
+  // links a clicked footprint to its node in the FactoryGraph. Undefined for the bulk
+  // lightweight foundations/walls, keeping those lean.
+  id?: string;
 }
 
 export interface BuildingCategoryDef {
@@ -167,6 +171,8 @@ export interface ParseResult {
   buildings: Building[];
   // Spline buildings (belts/pipes/hypertubes/rails) as connected polylines.
   buildingLines: BuildingLine[];
+  // Compact production graph (machines + logistics) for the efficiency feature.
+  factory: FactoryGraph;
   sessionName: string;
   saveVersion: number;
   // Fun aggregate statistics derived from the whole save (foundations, belt length, …).
@@ -196,4 +202,103 @@ export interface StatGroup {
 
 export interface SaveStats {
   groups: StatGroup[];
+}
+
+// --- Recipe rates (static game data, public/data/recipes.json) ---
+
+export interface RecipeItemAmount {
+  item: string;   // item class, e.g. 'Desc_IronIngot_C'
+  amount: number; // per craft, display units (items, or m³ for fluids)
+}
+
+export interface Recipe {
+  name: string;
+  time: number; // seconds per craft at 100% clock
+  ingredients: RecipeItemAmount[];
+  products: RecipeItemAmount[];
+  producedIn: string[]; // building Desc_* classes (fallback / sanity only)
+}
+
+export interface RecipeData {
+  version: number;
+  source: string;
+  generated: string;
+  recipes: Record<string, Recipe>;             // keyed by Recipe_*_C
+  items: Record<string, { name: string; liquid: boolean }>; // keyed by Desc_*_C
+}
+
+// --- Factory graph (topology + raw runtime props, derived from the save) ---
+//
+// Compact: machines + logistics routing nodes only (a few thousand), NOT the 75k
+// lightweight foundations. Edges come from the FGFactoryConnectionComponent
+// mConnectedComponent links; fluid networks are grouped by shared pipe network id.
+
+export type FactoryNodeKind =
+  | 'extractor' // miner / oil pump / water pump / fracking
+  | 'factory'   // smelter…manufacturer/refinery/blender/etc. (has a recipe)
+  | 'splitter'
+  | 'merger'
+  | 'storage'   // container / buffer — transparent buffer in steady state
+  | 'sink'      // AWESOME sink, train/truck/drone station, dimensional depot — absorbs
+  | 'other';
+
+export interface FactoryNode {
+  id: string;            // actor instanceName
+  cls: string;           // shortClass
+  kind: FactoryNodeKind;
+  x: number;             // game X (cm) — for labels / linking back to the footprint
+  y: number;
+  recipePath?: string;   // Recipe_*_C (factories)
+  clock: number;         // mCurrentPotential (1.0 when unset)
+  boost: number;         // mProductionBoost / somersloop multiplier (1.0 when unset)
+  productivity: number | null; // game's measured uptime 0..1, or null if unknown
+  resourceNodeId?: string;     // extractors: mExtractableResource pathName
+}
+
+export interface FactoryEdge {
+  from: string; // producer-side node id (its Output port)
+  to: string;   // consumer-side node id (its Input port)
+}
+
+export interface FactoryGraph {
+  nodes: FactoryNode[];
+  edges: FactoryEdge[];        // directed conveyor connections (machine-level)
+  pipeNetworks: string[][];    // groups of node ids sharing a fluid network
+}
+
+// --- Efficiency analysis (computed lazily from graph + recipes) ---
+
+export type EfficiencyStatus = 'full' | 'starved' | 'blocked' | 'idle' | 'unknown';
+
+export interface EfficiencyNeighbor {
+  id: string;
+  label: string; // building name + recipe/item, for the panel
+}
+
+export interface EfficiencyResult {
+  id: string;
+  cls: string;
+  kind: FactoryNodeKind;
+  recipeName?: string;
+  item?: string;        // primary output/extracted item, display name
+  clock: number;        // multiplier, e.g. 1.5
+  maxPerMin: number;    // theoretical max of the primary item/min (clock+boost applied)
+  actualPerMin: number; // estimated steady-state of the primary item/min
+  utilization: number;  // 0..1 — flow-estimated actual/max
+  measuredProductivity: number | null; // 0..1 from the save (ground-truth uptime)
+  status: EfficiencyStatus;
+  wastedPerMin: number; // producers over-producing: max - actual (0 otherwise)
+  neighborsIn: EfficiencyNeighbor[];
+  neighborsOut: EfficiencyNeighbor[];
+}
+
+export interface EfficiencyReport {
+  results: Record<string, EfficiencyResult>; // keyed by node id
+  ranked: string[];                          // node ids, worst utilization first
+  summary: {
+    machines: number;
+    underutilized: number; // utilization < ~95%
+    starved: number;
+    blocked: number;
+  };
 }
