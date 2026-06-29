@@ -1,8 +1,23 @@
 {
   "version": 1,
-  "generated": "2026-06-29T08:09:25.632Z",
-  "default": "satisfactory.20260629-0809.sav",
+  "generated": "2026-06-29T08:24:29.171Z",
+  "default": "satisfactory.20260629-0824.sav",
   "saves": [
+    {
+      "filename": "satisfactory.20260629-0824.sav",
+      "path": "saves/satisfactory.20260629-0824.sav",
+      "displayName": "SKY CITY 2 (2026-06-29 08:24 UTC)",
+      "saveName": "SKY CITY 2_autosave_3",
+      "sessionName": "SKY CITY 2",
+      "mapName": "Persistent_Level",
+      "date": "2026-06-29",
+      "timestamp": 1782721440,
+      "size": 4297142,
+      "saveHeaderType": 14,
+      "saveVersion": 60,
+      "buildVersion": 495413,
+      "playDurationSeconds": 1348457
+    },
     {
       "filename": "satisfactory.20260629-0809.sav",
       "path": "saves/satisfactory.20260629-0809.sav",
