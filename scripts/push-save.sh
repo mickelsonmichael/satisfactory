@@ -54,6 +54,22 @@ AUTH_URL="https://x-access-token:${DEPLOY_TOKEN}@github.com/${REPO_SLUG}.git"
 
 log() { printf '[push-save] %s\n' "$*"; }
 
+# Extract playDurationSeconds from a Satisfactory .sav header.
+# The header has variable-length strings, so we walk the offsets rather than
+# using a fixed byte position. Requires node (already needed for generate-manifest).
+get_play_duration() {
+  node --no-warnings -e "
+const buf = require('fs').readFileSync(process.argv[1]);
+let o = 0;
+const i32 = () => { const v = buf.readInt32LE(o); o += 4; return v; };
+const str = () => { const n = i32(); o += n < 0 ? -n * 2 : n > 0 ? n : 0; };
+const ht = i32(); i32(); i32();       // saveHeaderType, saveVersion, buildVersion
+if (ht >= 14) str();                   // saveName (AddedSaveName)
+str(); str(); str();                   // mapName, mapOptions, sessionName
+process.stdout.write(String(i32()));   // playDurationSeconds
+" "$1"
+}
+
 run_once() {
   # --- Ensure repo is present & up to date ----------------------------------------
   if [ ! -d "${WORK_DIR}/.git" ]; then
@@ -91,16 +107,23 @@ run_once() {
 
   log "Latest save: ${latest}"
 
-  # --- Skip if identical to the most recent save already in the repo --------------
-  # The newest source .sav is usually unchanged between runs (the server only
-  # rewrites it on autosave). A byte comparison is enough to dedupe that: a real
-  # new autosave always differs (the header carries playtime/timestamp counters),
-  # so we never miss a genuine update and never re-upload an identical file.
+  # --- Skip if no gameplay has occurred since the last uploaded save -------------
+  # The server autosaves on a timer even when no one is playing, so a raw byte
+  # comparison would always see differences (slot name, timestamp, playtime all
+  # change). Instead we compare playDurationSeconds: that counter only advances
+  # while the game is running with players, so an unchanged value means nothing
+  # worth uploading happened.
   local newest_existing
   newest_existing="$(ls -t "${dest_dir}"/*.sav 2>/dev/null | head -1 || true)"
-  if [ -n "${newest_existing}" ] && cmp -s "${latest}" "${newest_existing}"; then
-    log "Latest save is identical to $(basename "${newest_existing}"); nothing to do."
-    return 0
+  if [ -n "${newest_existing}" ]; then
+    local src_duration dest_duration
+    src_duration="$(get_play_duration "${latest}")"
+    dest_duration="$(get_play_duration "${newest_existing}")"
+    if [ "${src_duration}" = "${dest_duration}" ]; then
+      log "Play duration unchanged (${src_duration}s); nothing to do."
+      return 0
+    fi
+    log "Play duration: ${dest_duration}s → ${src_duration}s"
   fi
 
   cp -f "${latest}" "${dest}"
