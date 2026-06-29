@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useManifest, saveUrl } from '../hooks/useManifest';
 import { useSaveParser } from '../hooks/useSaveParser';
 import { LAYER_DEFAULTS } from '../lib/collectibles';
@@ -29,7 +29,9 @@ import type {
   ResourcePurity,
   Cave,
   CavesData,
+  RecipeData,
 } from '../types';
+import { analyzeEfficiency } from '../lib/efficiency';
 import MapViewer from './MapViewer';
 import LayerControls from './LayerControls';
 import LoadingOverlay from './LoadingOverlay';
@@ -83,6 +85,10 @@ export default function App() {
   const [resourcePurity, setResourcePurity] = useState<
     Record<string, Record<ResourcePurity, boolean>>
   >({});
+  // Efficiency analysis: heavy flow trace over the factory graph, gated behind a toggle.
+  const [recipeData, setRecipeData] = useState<RecipeData | null>(null);
+  const [showEfficiency, setShowEfficiency] = useState(false);
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
 
   // Load the game's complete collectible database once on mount
   useEffect(() => {
@@ -120,6 +126,16 @@ export default function App() {
       .catch((e) => console.error('Failed to load caves.json:', e));
   }, []);
 
+  // Recipe rates — only needed for the efficiency feature, so fetch lazily the first time
+  // it is enabled, then keep it cached.
+  useEffect(() => {
+    if (!showEfficiency || recipeData) return;
+    fetch(`${import.meta.env.BASE_URL}data/recipes.json`)
+      .then((r) => r.json())
+      .then((data: RecipeData) => setRecipeData(data))
+      .catch((e) => console.error('Failed to load recipes.json:', e));
+  }, [showEfficiency, recipeData]);
+
   // Jump to the default save once the manifest has loaded.
   useEffect(() => {
     if (defaultIndex != null) setSelectedIndex(defaultIndex);
@@ -155,6 +171,26 @@ export default function App() {
   const currentSave = uploadedFile ? null : (saves[selectedIndex] ?? null);
   const source = uploadedFile ?? (currentSave ? saveUrl(currentSave) : null);
   const { result, loading, error, progress, progressMsg } = useSaveParser(source, staticMarkers);
+
+  // Run the flow analysis when enabled (and inputs are ready). It is the one heavy step,
+  // so it only runs while the toggle is on; useMemo skips recompute on unrelated renders.
+  const efficiency = useMemo(() => {
+    if (!showEfficiency || !result?.factory || !recipeData) return null;
+    try {
+      return analyzeEfficiency(result.factory, recipeData, resourceData);
+    } catch (e) {
+      console.error('Efficiency analysis failed:', e);
+      return null;
+    }
+  }, [showEfficiency, result, recipeData, resourceData]);
+
+  const selectedResult =
+    selectedBuildingId && efficiency ? (efficiency.results[selectedBuildingId] ?? null) : null;
+
+  // A building id is only meaningful for the save it came from; clear it on save change.
+  useEffect(() => {
+    setSelectedBuildingId(null);
+  }, [result]);
 
   // History navigation. saves is newest-first, so a lower index is newer.
   const canGoNewer = saves.length > 0 && selectedIndex > 0;
@@ -256,6 +292,14 @@ export default function App() {
     setBuildingVisibility((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
+  // Enabling efficiency also reveals production buildings — the coloring and click-to-select
+  // act on those footprints, so without them the map shows nothing to analyze.
+  function toggleEfficiency() {
+    const next = !showEfficiency;
+    setShowEfficiency(next);
+    if (next) setBuildingVisibility((prev) => ({ ...prev, production: true }));
+  }
+
   function setAllBuildings(visible: boolean) {
     setBuildingVisibility((prev) =>
       Object.fromEntries(Object.keys(prev).map((id) => [id, visible])) as Record<
@@ -283,6 +327,10 @@ export default function App() {
         caves={caves}
         showCaves={showCaves}
         showHeight={showHeight}
+        efficiency={efficiency?.results ?? null}
+        showEfficiency={showEfficiency}
+        selectedBuildingId={selectedBuildingId}
+        onSelectBuilding={setSelectedBuildingId}
       />
 
       <LayerControls
@@ -317,6 +365,12 @@ export default function App() {
         onSetAllBuildings={setAllBuildings}
         onFileSelected={setUploadedFile}
         stats={result?.stats ?? null}
+        showEfficiency={showEfficiency}
+        onToggleEfficiency={toggleEfficiency}
+        efficiency={efficiency}
+        selectedResult={selectedResult}
+        onSelectBuilding={setSelectedBuildingId}
+        onCloseSelected={() => setSelectedBuildingId(null)}
       />
 
       {error && (
