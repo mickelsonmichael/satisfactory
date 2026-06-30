@@ -206,6 +206,7 @@ export default function LayerControls({
       {tab === 'efficiency' && (
         <EfficiencyReportView
           showEfficiency={showEfficiency}
+          onToggleEfficiency={onToggleEfficiency}
           report={efficiency}
           selectedId={selectedResult?.id ?? null}
           onSelect={onSelectBuilding}
@@ -278,18 +279,6 @@ export default function LayerControls({
           <span style={{ color: '#888', fontSize: 12 }}>Auto-refresh (15 min)</span>
         </label>
 
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-          title="Trace every conveyor & pipe network and estimate item flow to find bottlenecks. Colors machines by utilization and enables the Efficiency tab — a heavy step that can take a moment on large saves."
-        >
-          <input
-            type="checkbox"
-            checked={showEfficiency}
-            onChange={onToggleEfficiency}
-            style={{ accentColor: '#FA9549', width: 14, height: 14 }}
-          />
-          <span style={{ color: '#888', fontSize: 12 }}>Show efficiency ⚠</span>
-        </label>
       </div>
 
       {layerStates.length > 0 && (
@@ -586,108 +575,124 @@ const REPORT_LIMIT = 100;
 
 function EfficiencyReportView({
   showEfficiency,
+  onToggleEfficiency,
   report,
   selectedId,
   onSelect,
 }: {
   showEfficiency: boolean;
+  onToggleEfficiency: () => void;
   report: EfficiencyReport | null;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
-  if (!showEfficiency) {
-    return (
-      <div style={{ color: '#888', fontSize: 12, padding: '12px 0', lineHeight: 1.5 }}>
-        Enable <strong style={{ color: '#bbb' }}>Show efficiency</strong> in the Filters tab to
-        trace conveyor &amp; pipe networks and rank your least-utilized miners and factories.
-      </div>
-    );
-  }
-  if (!report) {
-    return <div style={{ color: '#888', fontSize: 12, padding: '12px 0' }}>Analyzing factory…</div>;
-  }
-
-  const { summary } = report;
   return (
-    <div style={{ paddingTop: 6 }}>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 6,
-          marginBottom: 10,
-          fontSize: 12,
-        }}
+    <>
+      <label
+        style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '10px 0 6px' }}
+        title="Trace every conveyor & pipe network and estimate item flow to find bottlenecks. Colors machines by utilization — a heavy step that can take a moment on large saves."
       >
-        <Stat label="Machines" value={summary.machines} />
-        <Stat label="Underutilized" value={summary.underutilized} color="#f2c14e" />
-        <Stat label="Starved" value={summary.starved} color={STATUS_COLOR.starved} />
-        <Stat label="Blocked" value={summary.blocked} color={STATUS_COLOR.blocked} />
-      </div>
-
-      <div style={{ color: '#666', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-        Least utilized
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {report.ranked.slice(0, REPORT_LIMIT).map((id) => {
-          const r = report.results[id];
-          const util = Math.round(headlineUtil(r) * 100);
-          const active = id === selectedId;
-          return (
-            <button
-              key={id}
-              onClick={() => onSelect(id)}
+        <input
+          type="checkbox"
+          checked={showEfficiency}
+          onChange={onToggleEfficiency}
+          style={{ accentColor: '#FA9549', width: 14, height: 14 }}
+        />
+        <span style={{ color: '#888', fontSize: 12 }}>Enable efficiency ⚠</span>
+      </label>
+      {!showEfficiency && (
+        <div style={{ color: '#888', fontSize: 12, padding: '4px 0 12px', lineHeight: 1.5 }}>
+          Trace conveyor &amp; pipe networks and rank your least-utilized miners and factories.
+        </div>
+      )}
+      {showEfficiency && !report && (
+        <div style={{ color: '#888', fontSize: 12, padding: '12px 0' }}>Analyzing factory…</div>
+      )}
+      {showEfficiency && report && (() => {
+        const { summary } = report;
+        return (
+          <div style={{ paddingTop: 6 }}>
+            <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                textAlign: 'left',
-                background: active ? 'rgba(250,149,73,0.15)' : 'none',
-                border: '1px solid',
-                borderColor: active ? '#FA9549' : 'transparent',
-                borderRadius: 4,
-                color: '#ccc',
-                cursor: 'pointer',
-                padding: '4px 6px',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: 6,
+                marginBottom: 10,
                 fontSize: 12,
               }}
             >
-              <span
-                aria-hidden
-                title={r.status}
-                style={{ width: 8, height: 8, flexShrink: 0, borderRadius: 2, background: STATUS_COLOR[r.status] }}
-              />
-              <span style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
-                <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {humanize(r.cls)}
-                </span>
-                {(r.recipeName || r.item) && (
-                  <span
+              <Stat label="Machines" value={summary.machines} />
+              <Stat label="Underutilized" value={summary.underutilized} color="#f2c14e" />
+              <Stat label="Starved" value={summary.starved} color={STATUS_COLOR.starved} />
+              <Stat label="Blocked" value={summary.blocked} color={STATUS_COLOR.blocked} />
+            </div>
+
+            <div style={{ color: '#666', fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+              Least utilized
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {report.ranked.slice(0, REPORT_LIMIT).map((id) => {
+                const r = report.results[id];
+                const util = Math.round(headlineUtil(r) * 100);
+                const active = id === selectedId;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => onSelect(id)}
                     style={{
-                      display: 'block',
-                      color: '#777',
-                      fontSize: 10.5,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      width: '100%',
+                      textAlign: 'left',
+                      background: active ? 'rgba(250,149,73,0.15)' : 'none',
+                      border: '1px solid',
+                      borderColor: active ? '#FA9549' : 'transparent',
+                      borderRadius: 4,
+                      color: '#ccc',
+                      cursor: 'pointer',
+                      padding: '4px 6px',
+                      fontSize: 12,
                     }}
                   >
-                    {r.recipeName ?? r.item}
-                  </span>
-                )}
-              </span>
-              <span style={{ flexShrink: 0, fontWeight: 700, color: utilColor(headlineUtil(r)) }}>{util}%</span>
-            </button>
-          );
-        })}
-      </div>
-      {report.ranked.length > REPORT_LIMIT && (
-        <div style={{ color: '#666', fontSize: 11, marginTop: 8 }}>
-          +{report.ranked.length - REPORT_LIMIT} more…
-        </div>
-      )}
-    </div>
+                    <span
+                      aria-hidden
+                      title={r.status}
+                      style={{ width: 8, height: 8, flexShrink: 0, borderRadius: 2, background: STATUS_COLOR[r.status] }}
+                    />
+                    <span style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}>
+                      <span style={{ display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {humanize(r.cls)}
+                      </span>
+                      {(r.recipeName || r.item) && (
+                        <span
+                          style={{
+                            display: 'block',
+                            color: '#777',
+                            fontSize: 10.5,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {r.recipeName ?? r.item}
+                        </span>
+                      )}
+                    </span>
+                    <span style={{ flexShrink: 0, fontWeight: 700, color: utilColor(headlineUtil(r)) }}>{util}%</span>
+                  </button>
+                );
+              })}
+            </div>
+            {report.ranked.length > REPORT_LIMIT && (
+              <div style={{ color: '#666', fontSize: 11, marginTop: 8 }}>
+                +{report.ranked.length - REPORT_LIMIT} more…
+              </div>
+            )}
+          </div>
+        );
+      })()}
+    </>
   );
 }
 
