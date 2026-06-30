@@ -54,22 +54,6 @@ AUTH_URL="https://x-access-token:${DEPLOY_TOKEN}@github.com/${REPO_SLUG}.git"
 
 log() { printf '[push-save] %s\n' "$*"; }
 
-# Extract playDurationSeconds from a Satisfactory .sav header.
-# The header has variable-length strings, so we walk the offsets rather than
-# using a fixed byte position. Requires node (already needed for generate-manifest).
-get_play_duration() {
-  node --no-warnings -e "
-const buf = require('fs').readFileSync(process.argv[1]);
-let o = 0;
-const i32 = () => { const v = buf.readInt32LE(o); o += 4; return v; };
-const str = () => { const n = i32(); o += n < 0 ? -n * 2 : n > 0 ? n : 0; };
-const ht = i32(); i32(); i32();       // saveHeaderType, saveVersion, buildVersion
-if (ht >= 14) str();                   // saveName (AddedSaveName)
-str(); str(); str();                   // mapName, mapOptions, sessionName
-process.stdout.write(String(i32()));   // playDurationSeconds
-" "$1"
-}
-
 run_once() {
   # --- Ensure repo is present & up to date ----------------------------------------
   if [ ! -d "${WORK_DIR}/.git" ]; then
@@ -108,22 +92,27 @@ run_once() {
   log "Latest save: ${latest}"
 
   # --- Skip if no gameplay has occurred since the last uploaded save -------------
-  # The server autosaves on a timer even when no one is playing, so a raw byte
-  # comparison would always see differences (slot name, timestamp, playtime all
-  # change). Instead we compare playDurationSeconds: that counter only advances
-  # while the game is running with players, so an unchanged value means nothing
-  # worth uploading happened.
+  # The server autosaves on a timer even when no one is playing, so header fields
+  # (slot name, timestamp, playDurationSeconds) always change — playDurationSeconds
+  # advances with server uptime, not player time. Instead we compare compressed
+  # file sizes: idle saves fluctuate ±~2 KB per interval (just factory automation
+  # changing item positions in the zlib stream), while real gameplay (new buildings,
+  # research, etc.) consistently grows the file by 10–18 KB per interval.
+  # A 5 KB threshold reliably separates the two without false positives.
+  local SIZE_THRESHOLD=5000
   local newest_existing
   newest_existing="$(ls -t "${dest_dir}"/*.sav 2>/dev/null | head -1 || true)"
   if [ -n "${newest_existing}" ]; then
-    local src_duration dest_duration
-    src_duration="$(get_play_duration "${latest}")"
-    dest_duration="$(get_play_duration "${newest_existing}")"
-    if [ "${src_duration}" = "${dest_duration}" ]; then
-      log "Play duration unchanged (${src_duration}s); nothing to do."
+    local src_size dest_size delta abs_delta
+    src_size="$(stat -c '%s' "${latest}")"
+    dest_size="$(stat -c '%s' "${newest_existing}")"
+    delta=$(( src_size - dest_size ))
+    abs_delta=$(( delta < 0 ? -delta : delta ))
+    if [ "${abs_delta}" -lt "${SIZE_THRESHOLD}" ]; then
+      log "File size within idle threshold (${dest_size}B → ${src_size}B, delta ${delta}B < ${SIZE_THRESHOLD}B); nothing to do."
       return 0
     fi
-    log "Play duration: ${dest_duration}s → ${src_duration}s"
+    log "File size: ${dest_size}B → ${src_size}B (delta: ${delta}B)"
   fi
 
   cp -f "${latest}" "${dest}"
