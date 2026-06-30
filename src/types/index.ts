@@ -262,11 +262,15 @@ export interface FactoryNode {
   kind: FactoryNodeKind;
   x: number;             // game X (cm) — for labels / linking back to the footprint
   y: number;
+  z: number;             // game Z (cm), elevation
   recipePath?: string;   // Recipe_*_C (factories)
   clock: number;         // mCurrentPotential (1.0 when unset)
   boost: number;         // mProductionBoost / somersloop multiplier (1.0 when unset)
   productivity: number | null; // game's measured uptime 0..1, or null if unknown
   resourceNodeId?: string;     // extractors: mExtractableResource pathName
+  openInputs: number;   // count of unconnected Input#/PipeInputFactory# ports
+  openOutputs: number;  // count of unconnected Output#/PipeOutputFactory# ports
+  hasPower: boolean;    // false only when a FGPowerConnectionComponent is found with no mPowerCircuit
 }
 
 export interface FactoryEdge {

@@ -73,6 +73,7 @@ export default function App() {
   >({});
   const [recipeData, setRecipeData] = useState<RecipeData | null>(null);
   const [showEfficiency, setShowEfficiency] = useState(false);
+  const [showDisconnections, setShowDisconnections] = useState(false);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
 
   // Load static resource node database (independent of the save file).
@@ -158,6 +159,15 @@ export default function App() {
 
   const selectedResult =
     selectedBuildingId && efficiency ? (efficiency.results[selectedBuildingId] ?? null) : null;
+
+  const disconnectionCount = useMemo(() => {
+    if (!result?.factory) return 0;
+    return result.factory.nodes.filter(
+      (n) =>
+        (n.kind === 'factory' || n.kind === 'extractor') &&
+        (n.openInputs > 0 || n.openOutputs > 0 || !n.hasPower),
+    ).length;
+  }, [result?.factory]);
 
   function markCollected(id: string) {
     setLocalCollected((prev) => new Set(prev).add(id));
@@ -258,6 +268,8 @@ export default function App() {
           showEfficiency={showEfficiency}
           selectedBuildingId={selectedBuildingId}
           onSelectBuilding={setSelectedBuildingId}
+          factory={result?.factory ?? null}
+          showDisconnections={showDisconnections}
         />
 
         <LayerControls
@@ -285,6 +297,9 @@ export default function App() {
           selectedResult={selectedResult}
           onSelectBuilding={setSelectedBuildingId}
           onCloseSelected={() => setSelectedBuildingId(null)}
+          showDisconnections={showDisconnections}
+          onToggleDisconnections={() => setShowDisconnections((v) => !v)}
+          disconnectionCount={disconnectionCount}
         />
       </div>
 
