@@ -48,7 +48,7 @@ function NavButton({
   );
 }
 
-export default function TopNav() {
+export default function TopNav({ onOpenSettings }: { onOpenSettings: () => void }) {
   const {
     currentSave,
     uploadedFile,
@@ -158,6 +158,25 @@ export default function TopNav() {
       <div style={{ flex: 1 }} />
 
       <FileUpload onFileSelected={setUploadedFile} />
+
+      <button
+        onClick={onOpenSettings}
+        title="Settings"
+        style={{
+          background: 'none',
+          border: '1px solid #444',
+          borderRadius: 6,
+          color: '#888',
+          cursor: 'pointer',
+          fontSize: 16,
+          lineHeight: 1,
+          padding: '5px 7px',
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        ⚙
+      </button>
     </div>
   );
 }

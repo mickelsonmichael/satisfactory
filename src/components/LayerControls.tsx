@@ -14,7 +14,6 @@ import { getCollectibleIconUrl } from '../lib/icons';
 import { BUILDING_CATEGORIES, humanize } from '../lib/buildings';
 import { headlineUtil, STATUS_COLOR, utilColor } from '../lib/efficiencyDisplay';
 import EfficiencyPanel from './EfficiencyPanel';
-import { useSave } from '../context/SaveContext';
 import { TOP_NAV_HEIGHT } from './TopNav';
 
 interface Props {
@@ -92,7 +91,6 @@ export default function LayerControls({
   onToggleDisconnections,
   disconnectionCount,
 }: Props) {
-  const { autoRefresh, setAutoRefresh } = useSave();
   const [resourcesExpanded, setResourcesExpanded] = useState(false);
   const [buildingsExpanded, setBuildingsExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
@@ -270,19 +268,6 @@ export default function LayerControls({
             style={{ accentColor: '#FA9549', width: 14, height: 14 }}
           />
           <span style={{ color: '#888', fontSize: 12 }}>Always show height</span>
-        </label>
-
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-          title="Automatically re-check for a newer save every 15 minutes and load it when found"
-        >
-          <input
-            type="checkbox"
-            checked={autoRefresh}
-            onChange={() => setAutoRefresh(!autoRefresh)}
-            style={{ accentColor: '#FA9549', width: 14, height: 14 }}
-          />
-          <span style={{ color: '#888', fontSize: 12 }}>Auto-refresh (15 min)</span>
         </label>
 
         <label

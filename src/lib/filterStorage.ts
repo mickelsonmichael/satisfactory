@@ -10,6 +10,8 @@ const BUILDING_KEY = 'satisfactory-map:building-filters';
 const CAVES_KEY = 'satisfactory-map:show-caves';
 const HEIGHT_KEY = 'satisfactory-map:show-height';
 const AUTO_REFRESH_KEY = 'satisfactory-map:auto-refresh';
+const AUTO_REFRESH_INTERVAL_KEY = 'satisfactory-map:auto-refresh-interval';
+const BUILDING_OPACITY_KEY = 'satisfactory-map:building-opacity';
 const SEEN_PODS_KEY = 'satisfactory-map:seen-drop-pod-ids';
 
 type ResourcePurityState = Record<string, Record<ResourcePurity, boolean>>;
@@ -91,6 +93,31 @@ export function loadAutoRefresh(): boolean {
 
 export function saveAutoRefresh(value: boolean): void {
   write(AUTO_REFRESH_KEY, value);
+}
+
+// --- Auto-refresh interval in minutes ---
+
+export type AutoRefreshInterval = 5 | 15 | 30 | 45 | 60;
+const VALID_INTERVALS: AutoRefreshInterval[] = [5, 15, 30, 45, 60];
+
+export function loadAutoRefreshInterval(): AutoRefreshInterval {
+  const v = read<number>(AUTO_REFRESH_INTERVAL_KEY);
+  return VALID_INTERVALS.includes(v as AutoRefreshInterval) ? (v as AutoRefreshInterval) : 15;
+}
+
+export function saveAutoRefreshInterval(v: AutoRefreshInterval): void {
+  write(AUTO_REFRESH_INTERVAL_KEY, v);
+}
+
+// --- Building overlay opacity (0..1, default 1) ---
+
+export function loadBuildingOpacity(): number {
+  const v = read<number>(BUILDING_OPACITY_KEY);
+  return typeof v === 'number' && v >= 0 && v <= 1 ? v : 1;
+}
+
+export function saveBuildingOpacity(v: number): void {
+  write(BUILDING_OPACITY_KEY, v);
 }
 
 // --- Seen DropPod instance names (for deconstructed-pod detection across saves) ---

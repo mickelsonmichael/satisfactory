@@ -17,6 +17,9 @@ interface Props {
   showEfficiency: boolean;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  // Overall canvas CSS opacity (0..1). Applied via style.opacity so the user can dim the
+  // overlay without touching the per-category fill/stroke alpha constants.
+  opacity: number;
 }
 
 // Fill opacity for footprints — translucent so the terrain reads through the base.
@@ -292,6 +295,7 @@ export default function BuildingLayer({
   showEfficiency,
   selectedId,
   onSelect,
+  opacity,
 }: Props) {
   const map = useMap();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -300,6 +304,11 @@ export default function BuildingLayer({
   const redrawRef = useRef<() => void>(() => {});
   const hoverIdRef = useRef<Building | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
+
+  // Sync CSS opacity without triggering a full canvas repaint.
+  useEffect(() => {
+    if (canvasRef.current) canvasRef.current.style.opacity = String(opacity);
+  }, [opacity]);
 
   // Precompute rotation once per save, and index every building into the spatial grid by
   // its center cell. Both the renderer and the hit-test reuse this single structure.

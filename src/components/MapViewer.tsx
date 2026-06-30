@@ -59,6 +59,7 @@ interface Props {
   onSelectBuilding: (id: string | null) => void;
   factory: FactoryGraph | null;
   showDisconnections: boolean;
+  buildingOpacity: number;
 }
 
 // Reports the visible bounds and zoom after the map settles so MarkerLayer can cull
@@ -86,7 +87,7 @@ function ViewportTracker({
   return null;
 }
 
-export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, buildings, buildingLines, buildingVisibility, caves, showCaves, showHeight, efficiency, showEfficiency, selectedBuildingId, onSelectBuilding, factory, showDisconnections }: Props) {
+export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, buildings, buildingLines, buildingVisibility, caves, showCaves, showHeight, efficiency, showEfficiency, selectedBuildingId, onSelectBuilding, factory, showDisconnections, buildingOpacity }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   // Icons grow with zoom; default to the floor size until the map reports its zoom.
   const [zoom, setZoom] = useState<number>(2);
@@ -128,6 +129,7 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
         showEfficiency={showEfficiency}
         selectedId={selectedBuildingId}
         onSelect={onSelectBuilding}
+        opacity={buildingOpacity}
       />
 
       {result &&
