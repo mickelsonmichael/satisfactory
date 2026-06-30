@@ -126,15 +126,16 @@ export default function App() {
       .catch((e) => console.error('Failed to load caves.json:', e));
   }, []);
 
-  // Recipe rates — only needed for the efficiency feature, so fetch lazily the first time
-  // it is enabled, then keep it cached.
+  // Recipe rates — needed for both the efficiency feature and the Recipes tab.
+  // Fetch lazily on first use of either feature, then keep cached.
+  const [needsRecipes, setNeedsRecipes] = useState(false);
   useEffect(() => {
-    if (!showEfficiency || recipeData) return;
+    if ((!showEfficiency && !needsRecipes) || recipeData) return;
     fetch(`${import.meta.env.BASE_URL}data/recipes.json`)
       .then((r) => r.json())
       .then((data: RecipeData) => setRecipeData(data))
       .catch((e) => console.error('Failed to load recipes.json:', e));
-  }, [showEfficiency, recipeData]);
+  }, [showEfficiency, needsRecipes, recipeData]);
 
   // Jump to the default save once the manifest has loaded.
   useEffect(() => {
@@ -371,6 +372,10 @@ export default function App() {
         selectedResult={selectedResult}
         onSelectBuilding={setSelectedBuildingId}
         onCloseSelected={() => setSelectedBuildingId(null)}
+        recipeData={recipeData}
+        markers={result?.markers ?? []}
+        unlockedSchematics={result?.unlockedSchematics ?? []}
+        onShowRecipes={() => setNeedsRecipes(true)}
       />
 
       {error && (

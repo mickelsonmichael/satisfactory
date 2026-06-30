@@ -10,6 +10,8 @@ import type {
   SaveStats,
   EfficiencyReport,
   EfficiencyResult,
+  RecipeData,
+  CollectibleMarker,
 } from '../types';
 import { getCollectibleIconUrl } from '../lib/icons';
 import { BUILDING_CATEGORIES, humanize } from '../lib/buildings';
@@ -17,6 +19,7 @@ import { headlineUtil, STATUS_COLOR, utilColor } from '../lib/efficiencyDisplay'
 import FileUpload from './FileUpload';
 import StatsPanel from './StatsPanel';
 import EfficiencyPanel from './EfficiencyPanel';
+import RecipesPanel from './RecipesPanel';
 
 interface Props {
   layerStates: LayerState[];
@@ -61,6 +64,11 @@ interface Props {
   selectedResult: EfficiencyResult | null;
   onSelectBuilding: (id: string | null) => void;
   onCloseSelected: () => void;
+  /** Recipe data + unlock state for the Recipes tab. */
+  recipeData: RecipeData | null;
+  markers: CollectibleMarker[];
+  unlockedSchematics: string[];
+  onShowRecipes: () => void;
 }
 
 // The set of purities a layer actually contains, so absent ones render no checkbox.
@@ -159,11 +167,15 @@ export default function LayerControls({
   selectedResult,
   onSelectBuilding,
   onCloseSelected,
+  recipeData,
+  markers,
+  unlockedSchematics,
+  onShowRecipes,
 }: Props) {
   const [resourcesExpanded, setResourcesExpanded] = useState(false);
   const [buildingsExpanded, setBuildingsExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
-  const [tab, setTab] = useState<'filters' | 'stats' | 'efficiency'>('filters');
+  const [tab, setTab] = useState<'filters' | 'stats' | 'efficiency' | 'recipes'>('filters');
 
   // Count placed buildings + connection lines per category for the section's row labels.
   const buildingCounts = useMemo(() => {
@@ -259,12 +271,15 @@ export default function LayerControls({
         </div>
       )}
 
-      {/* Tab strip: switch the body between filters, stats and the efficiency report. */}
-      <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
-        {(['filters', 'stats', 'efficiency'] as const).map((t) => (
+      {/* Tab strip: switch the body between filters, stats, efficiency and recipes. */}
+      <div style={{ display: 'flex', gap: 3, marginTop: 10 }}>
+        {(['filters', 'stats', 'efficiency', 'recipes'] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => {
+              setTab(t);
+              if (t === 'recipes') onShowRecipes();
+            }}
             style={{
               flex: 1,
               background: tab === t ? 'rgba(250,149,73,0.15)' : 'none',
@@ -273,7 +288,7 @@ export default function LayerControls({
               borderRadius: 5,
               color: tab === t ? '#FA9549' : '#aaa',
               cursor: 'pointer',
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 600,
               padding: '5px 0',
               textTransform: 'capitalize',
@@ -285,6 +300,14 @@ export default function LayerControls({
       </div>
 
       {tab === 'stats' && <StatsPanel stats={stats} />}
+
+      {tab === 'recipes' && (
+        <RecipesPanel
+          recipeData={recipeData}
+          markers={markers}
+          unlockedSchematics={unlockedSchematics}
+        />
+      )}
 
       {tab === 'efficiency' && (
         <EfficiencyReportView

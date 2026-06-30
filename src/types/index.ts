@@ -177,6 +177,9 @@ export interface ParseResult {
   saveVersion: number;
   // Fun aggregate statistics derived from the whole save (foundations, belt length, …).
   stats: SaveStats;
+  // Schematic class names that have been purchased/unlocked in this save (e.g. 'Schematic_2-5_C').
+  // Empty array when the save has no schematic manager data (early versions, custom saves).
+  unlockedSchematics: string[];
 }
 
 // --- Save statistics (Stats tab) ---
@@ -217,6 +220,12 @@ export interface Recipe {
   ingredients: RecipeItemAmount[];
   products: RecipeItemAmount[];
   producedIn: string[]; // building Desc_* classes (fallback / sanity only)
+  // Unlock / progression metadata (from generate-recipes.mjs v2+)
+  isAlternate: boolean;
+  tier: number;          // -1 = MAM/custom; 0 = tutorial; 1-8 = HUB milestones
+  schematicType: string; // 'EST_Milestone' | 'EST_Alternate' | 'EST_MAM' | 'EST_Tutorial' | 'EST_Custom'
+  schematicName: string;
+  schematicClass: string;
 }
 
 export interface RecipeData {
