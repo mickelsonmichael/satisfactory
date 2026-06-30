@@ -472,6 +472,7 @@ function TierBanner({ label, locked }: { label: string; locked: boolean }) {
 
 export default function RecipesPanel({ recipeData, markers, unlockedSchematics }: Props) {
   const [selectedRecipe, setSelectedRecipe] = useState<[string, Recipe] | null>(null);
+  const [search, setSearch] = useState('');
 
   const groups = useMemo(() => (recipeData ? buildAlternateGroups(recipeData) : []), [recipeData]);
 
@@ -500,6 +501,24 @@ export default function RecipesPanel({ recipeData, markers, unlockedSchematics }
     return max;
   }, [hasSaveData, recipeData, unlockedSet]);
 
+  const filteredGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return groups;
+    return groups
+      .map((group) => ({
+        ...group,
+        recipes: group.recipes.filter(([, recipe]) => {
+          if (recipe.name.toLowerCase().includes(q)) return true;
+          const items = recipeData?.items ?? {};
+          return (
+            recipe.ingredients.some((ing) => items[ing.item]?.name.toLowerCase().includes(q)) ||
+            recipe.products.some((prod) => items[prod.item]?.name.toLowerCase().includes(q))
+          );
+        }),
+      }))
+      .filter((group) => group.recipes.length > 0);
+  }, [groups, search, recipeData]);
+
   if (!recipeData) {
     return (
       <div style={{ color: '#888', fontSize: 12, padding: '12px 0', lineHeight: 1.5 }}>
@@ -512,7 +531,46 @@ export default function RecipesPanel({ recipeData, markers, unlockedSchematics }
     <div style={{ paddingTop: 4 }}>
       <HardDriveCounter markers={markers} />
 
-      {groups.map((group) => {
+      <div style={{ position: 'relative', marginTop: 8, marginBottom: 4 }}>
+        <input
+          type="search"
+          placeholder="Search by name, input, or output…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid #2a2a35',
+            borderRadius: 6,
+            color: '#ddd',
+            fontSize: 12,
+            padding: '6px 10px 6px 28px',
+            outline: 'none',
+          }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = '#FA9549'; }}
+          onBlur={(e) => { e.currentTarget.style.borderColor = '#2a2a35'; }}
+        />
+        <svg
+          aria-hidden="true"
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="none"
+          style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}
+        >
+          <circle cx="6.5" cy="6.5" r="5" stroke="#666" strokeWidth="1.5" />
+          <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="#666" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      </div>
+
+      {search.trim() && filteredGroups.length === 0 && (
+        <div style={{ color: '#666', fontSize: 12, textAlign: 'center', padding: '16px 0' }}>
+          No alternates match &ldquo;{search.trim()}&rdquo;
+        </div>
+      )}
+
+      {filteredGroups.map((group) => {
         // A tier is locked when we can confirm the player hasn't reached it yet —
         // only flag when a HIGHER tier is confirmed unlocked to avoid false positives.
         const tierLocked =

@@ -102,10 +102,24 @@ interface SaveLevel {
   collectables?: SaveCollectable[];
 }
 
+// Lightweight extraction of DropPod instanceNames for bootstrapping the "seen" set.
+// Parses the save synchronously and returns only the pod IDs — cheaper than a full
+// parseSaveFile when the caller only needs to seed the deconstructed-pod cache.
+export function extractDropPodIds(filename: string, buffer: ArrayBuffer): string[] {
+  const save = Parser.ParseSave(filename, buffer);
+  const levels = Object.values(save.levels as Record<string, SaveLevel>);
+  return levels.flatMap((l) =>
+    (l.objects ?? [])
+      .filter((o) => (o as SaveObject).typePath?.includes('BP_DropPod'))
+      .map((o) => (o as SaveObject).instanceName),
+  );
+}
+
 export async function parseSaveFile(
   filename: string,
   buffer: ArrayBuffer,
   staticMarkers: StaticMarker[],
+  seenDropPodIds: ReadonlySet<string>,
   onProgress?: (pct: number, msg: string) => void,
 ): Promise<ParseResult> {
   const save = Parser.ParseSave(filename, buffer, {
@@ -139,6 +153,17 @@ export async function parseSaveFile(
             o.typePath?.includes('BP_DropPod') &&
             o.properties?.['mHasBeenLooted'] !== undefined,
         )
+        .map((o) => o.instanceName),
+    ),
+  );
+
+  // ALL DropPod instanceNames present in this save's objects (looted or not). Used for
+  // two purposes: returned as dropPodIds so the caller can accumulate the "ever seen"
+  // set across saves, and used below to detect the "absent = deconstructed" case.
+  const allDropPodIds = new Set(
+    levels.flatMap((l) =>
+      (l.objects ?? [])
+        .filter((o) => o.typePath?.includes('BP_DropPod'))
         .map((o) => o.instanceName),
     ),
   );
@@ -225,9 +250,16 @@ export async function parseSaveFile(
     x: sm.x,
     y: sm.y,
     z: sm.z,
-    // DropPods can be marked collected two ways: mHasBeenLooted=true (drive taken, pod
-    // stays in world) OR appearing in collectables (pod dismantled / removed from world).
-    collected: collectedPaths.has(sm.id) || lootedDropPodPaths.has(sm.id),
+    // DropPods can be marked collected three ways:
+    //  1. In level.collectables — pod dismantled and properly tracked by the game.
+    //  2. In objects with mHasBeenLooted present — drive taken, pod still standing.
+    //  3. Absent from objects AND previously seen in a past save — Satisfactory has a
+    //     bug where deconstructing a pod sometimes removes it from the save entirely
+    //     (skipping collectables). "Was seen before, now gone" = deconstructed = collected.
+    collected:
+      collectedPaths.has(sm.id) ||
+      lootedDropPodPaths.has(sm.id) ||
+      (sm.type === 'hardDrive' && seenDropPodIds.has(sm.id) && !allDropPodIds.has(sm.id)),
   }));
 
   // Extract purchased/unlocked schematics from the SchematicManager. The manager object
@@ -284,5 +316,6 @@ export async function parseSaveFile(
       header.playDurationSeconds ?? 0,
     ),
     unlockedSchematics: [...unlockedSchematicSet],
+    dropPodIds: [...allDropPodIds],
   };
 }
