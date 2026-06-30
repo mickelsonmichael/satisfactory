@@ -16,7 +16,10 @@ import {
   saveShowHeight,
   loadAutoRefresh,
   saveAutoRefresh,
+  loadSeenDropPodIds,
+  mergeSeenDropPodIds,
 } from '../lib/filterStorage';
+import { extractDropPodIds } from '../lib/parserAdapter';
 import type {
   LayerState,
   CollectibleType,
@@ -77,6 +80,7 @@ export default function App() {
   const [showCaves, setShowCaves] = useState<boolean>(loadShowCaves);
   const [showHeight, setShowHeight] = useState<boolean>(loadShowHeight);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(loadAutoRefresh);
+  const [seenDropPodIds, setSeenDropPodIds] = useState<ReadonlySet<string>>(loadSeenDropPodIds);
   const [buildingVisibility, setBuildingVisibility] = useState<Record<BuildingCategory, boolean>>(
     initBuildingVisibility,
   );
@@ -142,6 +146,25 @@ export default function App() {
     if (defaultIndex != null) setSelectedIndex(defaultIndex);
   }, [defaultIndex]);
 
+  // Bootstrap: when the "seen" set is empty on first use, scan the oldest available
+  // save to seed it. This ensures pods collected before the user started using the app
+  // (or in sessions that weren't browsed yet) are still detected. Runs once per device.
+  useEffect(() => {
+    if (seenDropPodIds.size > 0 || saves.length === 0) return;
+    const oldest = saves[saves.length - 1];
+    fetch(saveUrl(oldest))
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject()))
+      .then((buf) => {
+        const ids = extractDropPodIds(oldest.filename, buf);
+        mergeSeenDropPodIds(ids);
+        setSeenDropPodIds(loadSeenDropPodIds());
+      })
+      .catch(() => {});
+  // Intentionally only re-run when saves length changes (new manifest load), not on
+  // every seenDropPodIds change — once seenDropPodIds is non-empty the guard exits early.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saves.length]);
+
   // While auto-refresh is on, re-check the manifest every 15 minutes for a newer save.
   useEffect(() => {
     if (!autoRefresh) return;
@@ -171,7 +194,11 @@ export default function App() {
   // The manifest save currently displayed (null while an uploaded file is shown).
   const currentSave = uploadedFile ? null : (saves[selectedIndex] ?? null);
   const source = uploadedFile ?? (currentSave ? saveUrl(currentSave) : null);
-  const { result, loading, error, progress, progressMsg } = useSaveParser(source, staticMarkers);
+  const { result, loading, error, progress, progressMsg } = useSaveParser(
+    source,
+    staticMarkers,
+    seenDropPodIds,
+  );
 
   // Run the flow analysis when enabled (and inputs are ready). It is the one heavy step,
   // so it only runs while the toggle is on; useMemo skips recompute on unrelated renders.
@@ -191,6 +218,14 @@ export default function App() {
   // A building id is only meaningful for the save it came from; clear it on save change.
   useEffect(() => {
     setSelectedBuildingId(null);
+  }, [result]);
+
+  // Accumulate DropPod IDs seen across saves so deconstructed pods (which vanish
+  // from the save due to a game bug) can still be detected as collected.
+  useEffect(() => {
+    if (!result || result.dropPodIds.length === 0) return;
+    mergeSeenDropPodIds(result.dropPodIds);
+    setSeenDropPodIds(loadSeenDropPodIds());
   }, [result]);
 
   // History navigation. saves is newest-first, so a lower index is newer.

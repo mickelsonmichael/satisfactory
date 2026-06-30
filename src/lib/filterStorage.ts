@@ -10,6 +10,7 @@ const BUILDING_KEY = 'satisfactory-map:building-filters';
 const CAVES_KEY = 'satisfactory-map:show-caves';
 const HEIGHT_KEY = 'satisfactory-map:show-height';
 const AUTO_REFRESH_KEY = 'satisfactory-map:auto-refresh';
+const SEEN_PODS_KEY = 'satisfactory-map:seen-drop-pod-ids';
 
 type ResourcePurityState = Record<string, Record<ResourcePurity, boolean>>;
 type BuildingVisibility = Partial<Record<BuildingCategory, boolean>>;
@@ -90,4 +91,29 @@ export function loadAutoRefresh(): boolean {
 
 export function saveAutoRefresh(value: boolean): void {
   write(AUTO_REFRESH_KEY, value);
+}
+
+// --- Seen DropPod instance names (for deconstructed-pod detection across saves) ---
+//
+// When a player deconstructs a DropPod, Satisfactory sometimes removes it from the
+// save entirely (neither in objects nor in collectables) instead of moving it to
+// collectables. Tracking which pods we've ever seen in any save's objects lets us
+// detect the "was seen before, now absent" = deconstructed = collected case.
+
+export function loadSeenDropPodIds(): Set<string> {
+  const ids = read<string[]>(SEEN_PODS_KEY);
+  return new Set(Array.isArray(ids) ? ids : []);
+}
+
+export function mergeSeenDropPodIds(newIds: string[]): void {
+  if (newIds.length === 0) return;
+  const existing = loadSeenDropPodIds();
+  let changed = false;
+  for (const id of newIds) {
+    if (!existing.has(id)) {
+      existing.add(id);
+      changed = true;
+    }
+  }
+  if (changed) write(SEEN_PODS_KEY, [...existing]);
 }

@@ -180,6 +180,11 @@ export interface ParseResult {
   // Schematic class names that have been purchased/unlocked in this save (e.g. 'Schematic_2-5_C').
   // Empty array when the save has no schematic manager data (early versions, custom saves).
   unlockedSchematics: string[];
+  // DropPod instanceNames found in this save's objects (looted or not). Used by the
+  // caller to build a persistent "ever seen" set so that deconstructed pods (which
+  // vanish from both objects and collectables due to a game bug) can still be detected
+  // as collected in future parses.
+  dropPodIds: string[];
 }
 
 // --- Save statistics (Stats tab) ---

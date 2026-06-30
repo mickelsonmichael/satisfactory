@@ -13,6 +13,7 @@ interface UseSaveParserResult {
 export function useSaveParser(
   source: File | string | null,
   staticMarkers: StaticMarker[],
+  seenDropPodIds: ReadonlySet<string>,
 ): UseSaveParserResult {
   const [result, setResult] = useState<ParseResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,10 +53,16 @@ export function useSaveParser(
 
         await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
-        const parsed = await parseSaveFile(filename, buffer, staticMarkers, (pct, msg) => {
-          setProgress(pct);
-          setProgressMsg(msg);
-        });
+        const parsed = await parseSaveFile(
+          filename,
+          buffer,
+          staticMarkers,
+          seenDropPodIds,
+          (pct, msg) => {
+            setProgress(pct);
+            setProgressMsg(msg);
+          },
+        );
 
         if (abort.signal.aborted) return;
         setResult(parsed);
@@ -68,7 +75,7 @@ export function useSaveParser(
     })();
 
     return () => abort.abort();
-  }, [source, staticMarkers]);
+  }, [source, staticMarkers, seenDropPodIds]);
 
   return { result, loading, error, progress, progressMsg };
 }
