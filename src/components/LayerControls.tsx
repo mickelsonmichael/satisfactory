@@ -176,6 +176,7 @@ export default function LayerControls({
   const [buildingsExpanded, setBuildingsExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
   const [tab, setTab] = useState<'filters' | 'stats' | 'efficiency' | 'recipes'>('filters');
+  const [collapsed, setCollapsed] = useState(false);
 
   // Count placed buildings + connection lines per category for the section's row labels.
   const buildingCounts = useMemo(() => {
@@ -206,7 +207,33 @@ export default function LayerControls({
       if (ls.visible !== visible) onToggle(ls.type);
     });
   }
+  const SIDEBAR_W = 320;
+
   return (
+    <>
+    <button
+      onClick={() => setCollapsed((v) => !v)}
+      title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      style={{
+        position: 'fixed',
+        top: 12,
+        right: collapsed ? 0 : SIDEBAR_W,
+        transition: 'right 0.25s ease',
+        zIndex: 1001,
+        background: 'rgba(15,15,20,0.92)',
+        border: '1px solid #333',
+        borderRight: 'none',
+        borderRadius: '6px 0 0 6px',
+        color: '#aaa',
+        cursor: 'pointer',
+        fontSize: 13,
+        lineHeight: 1,
+        padding: '8px 6px',
+        backdropFilter: 'blur(6px)',
+      }}
+    >
+      {collapsed ? '‹' : '›'}
+    </button>
     <div
       style={{
         position: 'fixed',
@@ -220,11 +247,13 @@ export default function LayerControls({
         color: '#ddd',
         fontFamily: 'system-ui, sans-serif',
         fontSize: 13,
-        width: 320,
+        width: SIDEBAR_W,
         overflowY: 'auto',
         backdropFilter: 'blur(6px)',
         display: 'flex',
         flexDirection: 'column',
+        transform: collapsed ? 'translateX(100%)' : 'none',
+        transition: 'transform 0.25s ease',
       }}
     >
       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#fff' }}>
@@ -685,6 +714,7 @@ export default function LayerControls({
         <FileUpload onFileSelected={onFileSelected} />
       </div>
     </div>
+    </>
   );
 }
 
