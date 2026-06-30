@@ -7,19 +7,15 @@ import type {
   Building,
   BuildingLine,
   BuildingCategory,
-  SaveStats,
   EfficiencyReport,
   EfficiencyResult,
-  RecipeData,
-  CollectibleMarker,
 } from '../types';
 import { getCollectibleIconUrl } from '../lib/icons';
 import { BUILDING_CATEGORIES, humanize } from '../lib/buildings';
 import { headlineUtil, STATUS_COLOR, utilColor } from '../lib/efficiencyDisplay';
-import FileUpload from './FileUpload';
-import StatsPanel from './StatsPanel';
 import EfficiencyPanel from './EfficiencyPanel';
-import RecipesPanel from './RecipesPanel';
+import { useSave } from '../context/SaveContext';
+import { TOP_NAV_HEIGHT } from './TopNav';
 
 interface Props {
   layerStates: LayerState[];
@@ -31,21 +27,7 @@ interface Props {
   caveCount: number;
   showHeight: boolean;
   onToggleHeight: () => void;
-  autoRefresh: boolean;
-  onToggleAutoRefresh: () => void;
-  sessionName: string;
-  /** Unix seconds for the displayed manifest save, or null when an uploaded file is shown. */
-  saveTimestamp: number | null;
-  /** Name of the user-uploaded file currently shown, or null. */
-  uploadedFileName: string | null;
-  canGoNewer: boolean;
-  canGoOlder: boolean;
-  onGoNewer: () => void;
-  onGoOlder: () => void;
-  onGoNewest: () => void;
-  onGoOldest: () => void;
   resourceLayers: ResourceLayer[];
-  // Per-layer purity visibility: resourcePurity[layerId][purity].
   resourcePurity: Record<string, Record<ResourcePurity, boolean>>;
   onTogglePurity: (id: string, purity: ResourcePurity) => void;
   onSetAllResources: (visible: boolean) => void;
@@ -54,21 +36,12 @@ interface Props {
   buildingVisibility: Record<BuildingCategory, boolean>;
   onToggleBuildingCategory: (id: BuildingCategory) => void;
   onSetAllBuildings: (visible: boolean) => void;
-  onFileSelected: (file: File) => void;
-  /** Aggregate stats for the displayed save, or null until one is parsed. */
-  stats: SaveStats | null;
-  /** Efficiency analysis toggle (heavy flow trace) + its result and selection. */
   showEfficiency: boolean;
   onToggleEfficiency: () => void;
   efficiency: EfficiencyReport | null;
   selectedResult: EfficiencyResult | null;
   onSelectBuilding: (id: string | null) => void;
   onCloseSelected: () => void;
-  /** Recipe data + unlock state for the Recipes tab. */
-  recipeData: RecipeData | null;
-  markers: CollectibleMarker[];
-  unlockedSchematics: string[];
-  onShowRecipes: () => void;
 }
 
 // The set of purities a layer actually contains, so absent ones render no checkbox.
@@ -87,48 +60,6 @@ const PURITY_OPTIONS: { value: ResourcePurity; label: string; color: string }[] 
 
 const ICON_BASE = `${import.meta.env.BASE_URL}icons/resources/`;
 
-// Save timestamps are epoch seconds (UTC); display them in the viewer's local time.
-const DATE_FMT = new Intl.DateTimeFormat(undefined, {
-  year: 'numeric',
-  month: 'short',
-  day: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-});
-
-function NavButton({
-  label,
-  title,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  title: string;
-  disabled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={disabled ? `No ${title.toLowerCase()}` : title}
-      style={{
-        background: 'none',
-        border: '1px solid #444',
-        borderRadius: 4,
-        color: disabled ? '#444' : '#aaa',
-        cursor: disabled ? 'default' : 'pointer',
-        fontSize: 12,
-        lineHeight: 1,
-        padding: '2px 7px',
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      {label}
-    </button>
-  );
-}
-
 export default function LayerControls({
   layerStates,
   onToggle,
@@ -139,17 +70,6 @@ export default function LayerControls({
   caveCount,
   showHeight,
   onToggleHeight,
-  autoRefresh,
-  onToggleAutoRefresh,
-  sessionName,
-  saveTimestamp,
-  uploadedFileName,
-  canGoNewer,
-  canGoOlder,
-  onGoNewer,
-  onGoOlder,
-  onGoNewest,
-  onGoOldest,
   resourceLayers,
   resourcePurity,
   onTogglePurity,
@@ -159,23 +79,18 @@ export default function LayerControls({
   buildingVisibility,
   onToggleBuildingCategory,
   onSetAllBuildings,
-  onFileSelected,
-  stats,
   showEfficiency,
   onToggleEfficiency,
   efficiency,
   selectedResult,
   onSelectBuilding,
   onCloseSelected,
-  recipeData,
-  markers,
-  unlockedSchematics,
-  onShowRecipes,
 }: Props) {
+  const { autoRefresh, setAutoRefresh } = useSave();
   const [resourcesExpanded, setResourcesExpanded] = useState(false);
   const [buildingsExpanded, setBuildingsExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
-  const [tab, setTab] = useState<'filters' | 'stats' | 'efficiency' | 'recipes'>('filters');
+  const [tab, setTab] = useState<'filters' | 'efficiency'>('filters');
   const [collapsed, setCollapsed] = useState(false);
 
   // Count placed buildings + connection lines per category for the section's row labels.
@@ -216,7 +131,7 @@ export default function LayerControls({
       title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       style={{
         position: 'fixed',
-        top: 12,
+        top: TOP_NAV_HEIGHT + 12,
         right: collapsed ? 0 : SIDEBAR_W,
         transition: 'right 0.25s ease',
         zIndex: 1001,
@@ -237,7 +152,7 @@ export default function LayerControls({
     <div
       style={{
         position: 'fixed',
-        top: 0,
+        top: TOP_NAV_HEIGHT,
         right: 0,
         bottom: 0,
         zIndex: 1000,
@@ -256,43 +171,6 @@ export default function LayerControls({
         transition: 'transform 0.25s ease',
       }}
     >
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#fff' }}>
-        {sessionName || 'Satisfactory Map'}
-      </div>
-
-      {/* Save timestamp + history navigation (older / newer) */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          marginBottom: 6,
-        }}
-      >
-        <NavButton label="◀◀" title="Oldest save" disabled={!canGoOlder} onClick={onGoOldest} />
-        <NavButton label="◀" title="Older save" disabled={!canGoOlder} onClick={onGoOlder} />
-        <span
-          style={{
-            flex: 1,
-            textAlign: 'center',
-            fontSize: 12,
-            color: '#bbb',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-          title={uploadedFileName ?? undefined}
-        >
-          {uploadedFileName
-            ? `📁 ${uploadedFileName}`
-            : saveTimestamp != null
-              ? DATE_FMT.format(saveTimestamp * 1000)
-              : '—'}
-        </span>
-        <NavButton label="▶" title="Newer save" disabled={!canGoNewer} onClick={onGoNewer} />
-        <NavButton label="▶▶" title="Newest save" disabled={!canGoNewer} onClick={onGoNewest} />
-      </div>
-
       {/* Selected-building efficiency detail (shown above the tabs, on any tab). */}
       {selectedResult && (
         <div style={{ marginTop: 10 }}>
@@ -300,15 +178,12 @@ export default function LayerControls({
         </div>
       )}
 
-      {/* Tab strip: switch the body between filters, stats, efficiency and recipes. */}
+      {/* Tab strip */}
       <div style={{ display: 'flex', gap: 3, marginTop: 10 }}>
-        {(['filters', 'stats', 'efficiency', 'recipes'] as const).map((t) => (
+        {(['filters', 'efficiency'] as const).map((t) => (
           <button
             key={t}
-            onClick={() => {
-              setTab(t);
-              if (t === 'recipes') onShowRecipes();
-            }}
+            onClick={() => setTab(t)}
             style={{
               flex: 1,
               background: tab === t ? 'rgba(250,149,73,0.15)' : 'none',
@@ -327,16 +202,6 @@ export default function LayerControls({
           </button>
         ))}
       </div>
-
-      {tab === 'stats' && <StatsPanel stats={stats} />}
-
-      {tab === 'recipes' && (
-        <RecipesPanel
-          recipeData={recipeData}
-          markers={markers}
-          unlockedSchematics={unlockedSchematics}
-        />
-      )}
 
       {tab === 'efficiency' && (
         <EfficiencyReportView
@@ -407,7 +272,7 @@ export default function LayerControls({
           <input
             type="checkbox"
             checked={autoRefresh}
-            onChange={onToggleAutoRefresh}
+            onChange={() => setAutoRefresh(!autoRefresh)}
             style={{ accentColor: '#FA9549', width: 14, height: 14 }}
           />
           <span style={{ color: '#888', fontSize: 12 }}>Auto-refresh (15 min)</span>
@@ -710,9 +575,6 @@ export default function LayerControls({
         </>
       )}
 
-      <div style={{ borderTop: '1px solid #333', marginTop: 'auto', paddingTop: 12 }}>
-        <FileUpload onFileSelected={onFileSelected} />
-      </div>
     </div>
     </>
   );

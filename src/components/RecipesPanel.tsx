@@ -393,8 +393,6 @@ function HardDriveCounter({ markers }: { markers: CollectibleMarker[] }) {
         border: '1px solid rgba(250,149,73,0.25)',
         borderRadius: 6,
         padding: '7px 10px',
-        marginTop: 8,
-        marginBottom: 2,
       }}
     >
       <img
@@ -528,10 +526,10 @@ export default function RecipesPanel({ recipeData, markers, unlockedSchematics }
   }
 
   return (
-    <div style={{ paddingTop: 4 }}>
+    <div>
       <HardDriveCounter markers={markers} />
 
-      <div style={{ position: 'relative', marginTop: 8, marginBottom: 4 }}>
+      <div style={{ position: 'relative', marginTop: 10, marginBottom: 4 }}>
         <input
           type="search"
           placeholder="Search by name, input, or output…"
@@ -582,7 +580,7 @@ export default function RecipesPanel({ recipeData, markers, unlockedSchematics }
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))',
                 gap: 4,
                 marginTop: 4,
               }}
