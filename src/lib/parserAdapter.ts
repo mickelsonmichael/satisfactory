@@ -230,6 +230,44 @@ export async function parseSaveFile(
     collected: collectedPaths.has(sm.id) || lootedDropPodPaths.has(sm.id),
   }));
 
+  // Extract purchased/unlocked schematics from the SchematicManager. The manager object
+  // stores mPurchasedSchematics (bought at HUB) and mAvailableSchematics (can buy now).
+  // We try several property names to be resilient across save versions.
+  const unlockedSchematicSet = new Set<string>();
+  const SCHEMATIC_PROPS = ['mPurchasedSchematics', 'mAvailableSchematics', 'mObtainedSchematics'];
+
+  for (const l of levels) {
+    for (const o of l.objects ?? []) {
+      for (const propName of SCHEMATIC_PROPS) {
+        const prop = o.properties?.[propName];
+        if (!prop) continue;
+        // Array values may sit in .value (array) or .values depending on parser version.
+        const raw = prop.value;
+        const items: unknown[] = Array.isArray(raw)
+          ? raw
+          : Array.isArray((prop as { values?: unknown[] }).values)
+          ? (prop as { values?: unknown[] }).values!
+          : [];
+        for (const item of items) {
+          // Each item is an ObjectRef with a pathName like:
+          //   /Game/FactoryGame/Schematics/Schematic_2-5.Schematic_2-5_C
+          // UE convention: "Package.ClassName_C" — the class name is the part AFTER the
+          // last dot (shortClass takes the part BEFORE the dot, which is the asset name
+          // without _C and would not match greeny's schematic keys).
+          const path =
+            (item as { pathName?: string })?.pathName ??
+            (item as { value?: { pathName?: string } })?.value?.pathName;
+          if (path) {
+            const cls = path.split('.').pop() ?? '';
+            if (cls.startsWith('Schematic_') || cls.startsWith('Research_')) {
+              unlockedSchematicSet.add(cls);
+            }
+          }
+        }
+      }
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const header = (save as any).header ?? {};
 
@@ -245,5 +283,6 @@ export async function parseSaveFile(
       levels as unknown as Parameters<typeof computeStats>[0],
       header.playDurationSeconds ?? 0,
     ),
+    unlockedSchematics: [...unlockedSchematicSet],
   };
 }

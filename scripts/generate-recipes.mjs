@@ -48,12 +48,65 @@ async function main() {
   console.log(`Fetching ${DATA_URL} …`);
   const data = await fetchJson(DATA_URL);
 
+  // Build recipe → schematic mapping from the schematics section.
+  // Each schematic has unlock.recipes (array of recipe class names).
+  const recipeToSchematic = {};
+  for (const [sKey, sc] of Object.entries(data.schematics ?? {})) {
+    for (const rKey of sc.unlock?.recipes ?? []) {
+      if (!recipeToSchematic[rKey]) {
+        recipeToSchematic[rKey] = {
+          tier: sc.tier ?? -1,
+          type: sc.type ?? 'unknown',
+          name: sc.name ?? '',
+          cls: sKey,
+        };
+      }
+    }
+  }
+
+  // Greeny's tier field for EST_Alternate schematics is unreliable (most are 0).
+  // Derive alternate unlock tiers from when their ingredients first become producible
+  // via non-alternate milestone recipes. tier = max(ingredient earliest milestone tier),
+  // with raw materials (no milestone recipe) counting as tier 0.
+  const itemEarliestTier = {};
+  for (const [, sc] of Object.entries(data.schematics ?? {})) {
+    if (sc.type !== 'EST_Milestone' && sc.type !== 'EST_Tutorial' && sc.type !== 'EST_Custom') continue;
+    const t = sc.tier ?? 0;
+    for (const rKey of sc.unlock?.recipes ?? []) {
+      const r = data.recipes?.[rKey];
+      if (!r?.inMachine || r.alternate) continue;
+      for (const prod of r.products ?? []) {
+        if (itemEarliestTier[prod.item] === undefined || t < itemEarliestTier[prod.item]) {
+          itemEarliestTier[prod.item] = t;
+        }
+      }
+    }
+  }
+
+  // For each alternate recipe: max ingredient tier (0 for raw-material-only recipes).
+  const altDerivedTier = {};
+  for (const [, sc] of Object.entries(data.schematics ?? {})) {
+    if (sc.type !== 'EST_Alternate' && !(sc.type === 'EST_Custom')) continue;
+    for (const rKey of sc.unlock?.recipes ?? []) {
+      const r = data.recipes?.[rKey];
+      if (!r?.inMachine || !r.alternate) continue;
+      let maxT = 0;
+      for (const ing of r.ingredients ?? []) {
+        const t = itemEarliestTier[ing.item];
+        if (t !== undefined && t > maxT) maxT = t;
+      }
+      altDerivedTier[rKey] = maxT;
+    }
+  }
+
   // Recipes: keep only machine-automatable ones (a placed machine's mCurrentRecipe is
   // always one of these). Slim each to what the efficiency math needs.
   const recipes = {};
   for (const [key, r] of Object.entries(data.recipes ?? {})) {
     if (!r.inMachine) continue; // skip hand/workshop/build-gun recipes
     if (!r.time || r.time <= 0) continue;
+    const sch = recipeToSchematic[key] ?? null;
+    const isAlternate = !!(r.alternate);
     recipes[key] = {
       name: r.name,
       time: r.time,
@@ -61,6 +114,14 @@ async function main() {
       products: (r.products ?? []).map((p) => ({ item: p.item, amount: p.amount })),
       // producedIn classNames (Desc_*), useful as a fallback / sanity check.
       producedIn: r.producedIn ?? [],
+      // Unlock / progression metadata.
+      isAlternate,
+      // Greeny's tier for alternates is unreliable (most default to 0). Use ingredient-derived
+      // tier instead: max HUB milestone tier at which any ingredient first becomes producible.
+      tier: isAlternate ? (altDerivedTier[key] ?? 0) : (sch?.tier ?? -1),
+      schematicType: sch?.type ?? 'unknown',
+      schematicName: sch?.name ?? '',
+      schematicClass: sch?.cls ?? '',
     };
   }
 
@@ -71,7 +132,7 @@ async function main() {
   }
 
   const out = {
-    version: 1,
+    version: 3,
     source: 'greeny/SatisfactoryTools data/data.json (MIT)',
     generated: new Date().toISOString().slice(0, 10),
     recipes,
