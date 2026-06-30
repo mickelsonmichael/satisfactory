@@ -105,8 +105,8 @@ export function loadSeenDropPodIds(): Set<string> {
   return new Set(Array.isArray(ids) ? ids : []);
 }
 
-export function mergeSeenDropPodIds(newIds: string[]): void {
-  if (newIds.length === 0) return;
+export function mergeSeenDropPodIds(newIds: string[]): boolean {
+  if (newIds.length === 0) return false;
   const existing = loadSeenDropPodIds();
   let changed = false;
   for (const id of newIds) {
@@ -116,4 +116,5 @@ export function mergeSeenDropPodIds(newIds: string[]): void {
     }
   }
   if (changed) write(SEEN_PODS_KEY, [...existing]);
+  return changed;
 }

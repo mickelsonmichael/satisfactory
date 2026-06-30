@@ -156,8 +156,8 @@ export default function App() {
       .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject()))
       .then((buf) => {
         const ids = extractDropPodIds(oldest.filename, buf);
-        mergeSeenDropPodIds(ids);
-        setSeenDropPodIds(loadSeenDropPodIds());
+        const changed = mergeSeenDropPodIds(ids);
+        if (changed) setSeenDropPodIds(loadSeenDropPodIds());
       })
       .catch(() => {});
   // Intentionally only re-run when saves length changes (new manifest load), not on
@@ -222,10 +222,13 @@ export default function App() {
 
   // Accumulate DropPod IDs seen across saves so deconstructed pods (which vanish
   // from the save due to a game bug) can still be detected as collected.
+  // Only update state when something genuinely new was added — a new Set object with
+  // identical contents would change the reference and re-trigger the useSaveParser
+  // effect, creating an infinite reload loop.
   useEffect(() => {
     if (!result || result.dropPodIds.length === 0) return;
-    mergeSeenDropPodIds(result.dropPodIds);
-    setSeenDropPodIds(loadSeenDropPodIds());
+    const changed = mergeSeenDropPodIds(result.dropPodIds);
+    if (changed) setSeenDropPodIds(loadSeenDropPodIds());
   }, [result]);
 
   // History navigation. saves is newest-first, so a lower index is newer.
