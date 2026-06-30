@@ -70,7 +70,10 @@ export function useSaveParser(
         if (abort.signal.aborted) return;
         setError(e instanceof Error ? e.message : String(e));
       } finally {
-        if (!abort.signal.aborted) setLoading(false);
+        if (!abort.signal.aborted) {
+          setProgressMsg('');
+          setLoading(false);
+        }
       }
     })();
 
