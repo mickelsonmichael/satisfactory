@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useSave } from '../context/SaveContext';
 import { TOP_NAV_HEIGHT } from './TopNav';
+import { clearAllCached } from '../lib/parseCache';
 import type { AutoRefreshInterval } from '../lib/filterStorage';
 
 interface Props {
@@ -15,6 +17,19 @@ const PANEL_W = 300;
 
 export default function SettingsPanel({ open, onClose, buildingOpacity, onBuildingOpacityChange }: Props) {
   const { autoRefresh, setAutoRefresh, autoRefreshInterval, setAutoRefreshInterval } = useSave();
+  const [clearState, setClearState] = useState<'idle' | 'clearing' | 'cleared' | 'error'>('idle');
+
+  async function handleClearCache() {
+    setClearState('clearing');
+    try {
+      await clearAllCached();
+      setClearState('cleared');
+      setTimeout(() => setClearState('idle'), 2000);
+    } catch {
+      setClearState('error');
+      setTimeout(() => setClearState('idle'), 2000);
+    }
+  }
 
   if (!open) return null;
 
@@ -157,6 +172,51 @@ export default function SettingsPanel({ open, onClose, buildingOpacity, onBuildi
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid #2a2a2a', margin: '18px 0 16px' }} />
+
+          {/* Parse Cache */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 12, color: '#aaa', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Parse Cache
+              </div>
+              <div style={{ fontSize: 11, color: '#555', marginTop: 3 }}>
+                Up to 3 recent saves cached locally
+              </div>
+            </div>
+            <button
+              onClick={handleClearCache}
+              disabled={clearState !== 'idle'}
+              style={{
+                padding: '5px 12px',
+                background: clearState === 'cleared'
+                  ? 'rgba(250,149,73,0.15)'
+                  : clearState === 'error'
+                  ? 'rgba(200,60,60,0.15)'
+                  : 'none',
+                border: '1px solid',
+                borderColor: clearState === 'cleared'
+                  ? '#FA9549'
+                  : clearState === 'error'
+                  ? '#c83c3c'
+                  : '#444',
+                borderRadius: 5,
+                color: clearState === 'cleared'
+                  ? '#FA9549'
+                  : clearState === 'error'
+                  ? '#c83c3c'
+                  : '#aaa',
+                cursor: clearState === 'idle' ? 'pointer' : 'default',
+                fontSize: 11,
+                fontWeight: clearState !== 'idle' ? 700 : 400,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {clearState === 'clearing' ? 'Clearing…' : clearState === 'cleared' ? 'Cleared!' : clearState === 'error' ? 'Error' : 'Clear cache'}
+            </button>
           </div>
 
         </div>
