@@ -295,7 +295,7 @@ export default function BuildingLayer({
   visibility,
   efficiency,
   showEfficiency,
-  selectedId,
+  selectedId: _selectedId,
   onSelect,
   opacity,
 }: Props) {
