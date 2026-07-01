@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { LayerGroup, Marker, Popup } from 'react-leaflet';
+import { LayerGroup, Marker, Popup, useMap } from 'react-leaflet';
 import type { LatLngBounds } from 'leaflet';
 import type { ResourceLayer, ResourcePurity } from '../types';
 import { gameToLatLng } from '../lib/coordinates';
@@ -34,6 +34,7 @@ function purityLabel(p: PositionedNode['purity']): string {
 }
 
 export default function ResourceNodeLayer({ layer, purity, bounds, claimedNodes, iconSize }: Props) {
+  const map = useMap();
   const anyVisible = !!purity && (purity.pure || purity.normal || purity.impure);
   // Project this layer's markers to lat/lng once; gameToLatLng never changes for a marker.
   const positioned = useMemo<PositionedNode[]>(
@@ -70,7 +71,10 @@ export default function ResourceNodeLayer({ layer, purity, bounds, claimedNodes,
         return (
         <Marker key={m.id} position={[m.lat, m.lng]} icon={claimed ? claimedIcon : icon}>
           <Popup className="sf-popup">
-            <div className="sf-pop-title">{layer.name}</div>
+            <div className="sf-pop-header">
+              <div className="sf-pop-title">{layer.name}</div>
+              <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>
+            </div>
             {claimed && <span className="sf-pop-badge collected">Claimed</span>}
             {m.purity && (
               <span className={`sf-pop-badge purity-${m.purity}`}>{purityLabel(m.purity)}</span>

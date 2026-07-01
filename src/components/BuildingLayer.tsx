@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import type { Building, BuildingLine, BuildingCategory, EfficiencyResult } from '../types';
@@ -486,7 +486,12 @@ export default function BuildingLayer({
   return (
     <div
       className="sf-building-tip"
-      style={{ left: hover.px + 14, top: hover.py + 14, borderColor: CAT_COLOR[b.category] }}
+      style={{
+        '--cat-clr': CAT_COLOR[b.category],
+        left: hover.px,
+        top: hover.py - 10,
+        transform: 'translateX(-50%) translateY(-100%)',
+      } as React.CSSProperties}
     >
       <div className="sf-pop-title" style={{ color: CAT_COLOR[b.category] }}>
         {humanize(b.cls)}

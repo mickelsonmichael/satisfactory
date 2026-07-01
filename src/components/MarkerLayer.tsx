@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { LayerGroup, Marker, Popup } from 'react-leaflet';
+import { LayerGroup, Marker, Popup, useMap } from 'react-leaflet';
 import type { LatLngBounds } from 'leaflet';
 import type { CollectibleMarker, CollectibleType } from '../types';
 import { gameToLatLng } from '../lib/coordinates';
@@ -43,6 +43,7 @@ export default function MarkerLayer({
   showHeight,
   iconSize,
 }: Props) {
+  const map = useMap();
   // Project this layer's markers to lat/lng once; gameToLatLng never changes for a marker.
   const ofType = useMemo<PositionedMarker[]>(
     () =>
@@ -92,7 +93,10 @@ export default function MarkerLayer({
           icon={getIcon(type, false, showHeight ? heightLabel(m.z) : null, iconSize)}
         >
           <Popup className="sf-popup">
-            <div className="sf-pop-title">{label}</div>
+            <div className="sf-pop-header">
+              <div className="sf-pop-title">{label}</div>
+              <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>
+            </div>
             {m.cost && m.cost.length > 0 && (
               <dl className="sf-pop-coords sf-pop-cost">
                 {m.cost.map(({ item, amount }) => (
@@ -125,7 +129,10 @@ export default function MarkerLayer({
           icon={getIcon(type, true, showHeight ? heightLabel(m.z) : null, iconSize)}
         >
           <Popup className="sf-popup">
-            <div className="sf-pop-title">{label}</div>
+            <div className="sf-pop-header">
+              <div className="sf-pop-title">{label}</div>
+              <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>
+            </div>
             <span className="sf-pop-badge collected">Collected</span>
             {m.cost && m.cost.length > 0 && (
               <dl className="sf-pop-coords sf-pop-cost" style={{ opacity: 0.6 }}>

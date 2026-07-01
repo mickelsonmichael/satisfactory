@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { LayerGroup, Marker, Popup } from 'react-leaflet';
+import { LayerGroup, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import type { FactoryGraph } from '../types';
 import { gameToLatLng } from '../lib/coordinates';
@@ -45,6 +45,7 @@ const ICON_CONN  = makeIcon('#f97316', BROKEN_CONN_SVG);
 const ICON_BOTH  = makeIcon('#f97316', BROKEN_CONN_SVG, BADGE);
 
 export default function DisconnectionLayer({ factory, visible, onSelectBuilding }: Props) {
+  const map = useMap();
   const issues = useMemo(() => {
     if (!factory) return [];
     return factory.nodes.filter(
@@ -76,53 +77,49 @@ export default function DisconnectionLayer({ factory, visible, onSelectBuilding 
 
         return (
           <Marker key={node.id} position={[lat, lng]} icon={icon} zIndexOffset={500}>
-            <Popup minWidth={210}>
-              <div style={{ fontFamily: 'system-ui, sans-serif', fontSize: 13, color: '#ddd' }}>
-                <div style={{ fontWeight: 700, marginBottom: 6, color: '#FA9549', fontSize: 14 }}>
-                  {humanize(node.cls)}
-                </div>
-
-                {hasPowerIssue && (
-                  <div style={{ color: '#f87171', marginBottom: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span>⚡</span>
-                    <span>No power cable connected</span>
-                  </div>
-                )}
-                {node.openInputs > 0 && (
-                  <div style={{ color: '#fb923c', marginBottom: 3 }}>
-                    ↓ {node.openInputs} open input{node.openInputs !== 1 ? 's' : ''}
-                  </div>
-                )}
-                {node.openOutputs > 0 && (
-                  <div style={{ color: '#fb923c', marginBottom: 3 }}>
-                    ↑ {node.openOutputs} open output{node.openOutputs !== 1 ? 's' : ''}
-                  </div>
-                )}
-
-                <div style={{ marginTop: 8, borderTop: '1px solid #444', paddingTop: 6, color: '#999', fontSize: 11 }}>
-                  {node.clock !== 1 && <div>Clock: {Math.round(node.clock * 100)}%</div>}
-                  <div>X {Math.round(node.x / 100)} m · Y {Math.round(node.y / 100)} m · Z {Math.round(node.z / 100)} m</div>
-                </div>
-
-                {onSelectBuilding && (
-                  <button
-                    onClick={() => onSelectBuilding(node.id)}
-                    style={{
-                      marginTop: 8,
-                      width: '100%',
-                      background: 'rgba(250,149,73,0.15)',
-                      border: '1px solid #FA9549',
-                      borderRadius: 4,
-                      color: '#FA9549',
-                      cursor: 'pointer',
-                      fontSize: 11,
-                      padding: '4px 0',
-                    }}
-                  >
-                    Show in efficiency panel
-                  </button>
-                )}
+            <Popup className="sf-popup">
+              <div className="sf-pop-header">
+                <div className="sf-pop-title">{humanize(node.cls)}</div>
+                <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>
               </div>
+
+              {hasPowerIssue && (
+                <div className="sf-pop-issue-power">
+                  <span>⚡</span>
+                  <span>No power cable connected</span>
+                </div>
+              )}
+              {node.openInputs > 0 && (
+                <div className="sf-pop-issue-conn">
+                  ↓ {node.openInputs} open input{node.openInputs !== 1 ? 's' : ''}
+                </div>
+              )}
+              {node.openOutputs > 0 && (
+                <div className="sf-pop-issue-conn">
+                  ↑ {node.openOutputs} open output{node.openOutputs !== 1 ? 's' : ''}
+                </div>
+              )}
+
+              <dl className="sf-pop-coords">
+                {node.clock !== 1 && (
+                  <>
+                    <dt>Clock</dt>
+                    <dd>{Math.round(node.clock * 100)}%</dd>
+                  </>
+                )}
+                <dt>X</dt>
+                <dd>{Math.round(node.x / 100)} m</dd>
+                <dt>Y</dt>
+                <dd>{Math.round(node.y / 100)} m</dd>
+                <dt>Z</dt>
+                <dd>{Math.round(node.z / 100)} m</dd>
+              </dl>
+
+              {onSelectBuilding && (
+                <button className="sf-pop-btn" onClick={() => onSelectBuilding(node.id)}>
+                  Show in efficiency panel
+                </button>
+              )}
             </Popup>
           </Marker>
         );
