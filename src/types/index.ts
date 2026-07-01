@@ -17,6 +17,8 @@ export interface CollectibleMarker {
   collected: boolean;
   // Hard drives only: items required to open the drop pod (mActivationCost).
   cost?: Array<{ item: string; amount: number }>;
+  // Hard drives only: minimum power supply (MW) required to open the pod.
+  power?: number;
 }
 
 export interface StaticMarker {
@@ -25,6 +27,12 @@ export interface StaticMarker {
   x: number;
   y: number;
   z: number;
+  // Hard drives only: items required to open the drop pod (mActivationCost).
+  // Stored here as static data because the cost is a Blueprint default, not
+  // serialized into the save file.
+  cost?: Array<{ item: string; amount: number }>;
+  // Hard drives only: minimum power supply (MW) required to open the pod.
+  power?: number;
 }
 
 export interface StaticCollectibles {
