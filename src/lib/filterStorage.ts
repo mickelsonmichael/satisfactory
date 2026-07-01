@@ -113,7 +113,8 @@ export function saveAutoRefreshInterval(v: AutoRefreshInterval): void {
 
 export function loadBuildingOpacity(): number {
   const v = read<number>(BUILDING_OPACITY_KEY);
-  return typeof v === 'number' && v >= 0 && v <= 1 ? v : 1;
+  // Default 0.4 matches the hardcoded FILL_ALPHA the canvas used before the slider existed.
+  return typeof v === 'number' && v >= 0 && v <= 1 ? v : 0.4;
 }
 
 export function saveBuildingOpacity(v: number): void {

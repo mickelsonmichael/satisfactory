@@ -17,17 +17,11 @@ interface Props {
   showEfficiency: boolean;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  // Overall canvas CSS opacity (0..1). Applied via style.opacity so the user can dim the
-  // overlay without touching the per-category fill/stroke alpha constants.
+  // Canvas opacity (0..1). Scales all fill/stroke alphas so that 1.0 = fully opaque
+  // and 0.4 (the default) reproduces the original appearance.
   opacity: number;
 }
 
-// Fill opacity for footprints — translucent so the terrain reads through the base.
-const FILL_ALPHA = 0.4;
-// Stroke opacity for footprint outlines, only drawn once buildings are large on screen.
-const STROKE_ALPHA = 0.5;
-// Connection lines (belts/pipes) are drawn a touch more opaque so the network reads clearly.
-const LINE_ALPHA = 0.75;
 // Color for a production machine with no efficiency result (e.g. idle, unmodelled).
 const EFF_MISSING = '#6b7280';
 // Painted back-to-front: structure first, machines last so they sit on top.
@@ -152,7 +146,15 @@ function paint(
   linesByCat: Record<BuildingCategory, BuildingLine[]>,
   visibility: Record<BuildingCategory, boolean>,
   eff: EffView,
+  opacity: number,
 ): void {
+  // Scale all alphas so that opacity=0.4 (default) reproduces the original hardcoded
+  // constants and opacity=1.0 makes everything fully opaque.
+  const fillAlpha = opacity;
+  const strokeAlpha = Math.min(1, opacity * 1.25);   // 0.5 / 0.4
+  const lineAlpha = Math.min(1, opacity * 1.875);    // 0.75 / 0.4
+  const effFill = Math.min(1, opacity * 1.5);        // 0.6 / 0.4
+  const effStroke = Math.min(1, opacity * 1.75);     // 0.7 / 0.4
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, W, H);
   if (!BUILDING_CATEGORIES.some((cat) => visibility[cat.id])) return;
@@ -212,11 +214,11 @@ function paint(
     if (!path) continue;
     // Filling the whole category as one path also avoids the seams/over-darkening you get
     // when thousands of translucent rectangles overlap edge to edge.
-    c.globalAlpha = FILL_ALPHA;
+    c.globalAlpha = fillAlpha;
     c.fillStyle = CAT_COLOR[cat];
     c.fill(path);
     if (doStroke) {
-      c.globalAlpha = STROKE_ALPHA;
+      c.globalAlpha = strokeAlpha;
       c.strokeStyle = CAT_COLOR[cat];
       c.stroke(path);
     }
@@ -224,11 +226,11 @@ function paint(
   // Production machines colored by efficiency tier, more opaque so the status reads clearly.
   if (prodOn) {
     for (const [col, path] of prodTier) {
-      c.globalAlpha = 0.6;
+      c.globalAlpha = effFill;
       c.fillStyle = col;
       c.fill(path);
       if (doStroke) {
-        c.globalAlpha = 0.7;
+        c.globalAlpha = effStroke;
         c.strokeStyle = col;
         c.stroke(path);
       }
@@ -241,7 +243,7 @@ function paint(
   c.lineWidth = lineW;
   c.lineCap = 'round';
   c.lineJoin = 'round';
-  c.globalAlpha = LINE_ALPHA;
+  c.globalAlpha = lineAlpha;
   const lm = lineW + 2; // cull margin in px
   for (const cat of DRAW_ORDER) {
     if (!visibility[cat]) continue;
@@ -301,14 +303,13 @@ export default function BuildingLayer({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const affineRef = useRef<Affine | null>(null);
   const visRef = useRef(visibility);
+  const opacityRef = useRef(opacity);
   const redrawRef = useRef<() => void>(() => {});
   const hoverIdRef = useRef<Building | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
 
-  // Sync CSS opacity without triggering a full canvas repaint.
-  useEffect(() => {
-    if (canvasRef.current) canvasRef.current.style.opacity = String(opacity);
-  }, [opacity]);
+  // Keep live refs fresh so map-event handlers always read the latest props.
+  opacityRef.current = opacity;
 
   // Precompute rotation once per save, and index every building into the spatial grid by
   // its center cell. Both the renderer and the hit-test reuse this single structure.
@@ -394,7 +395,7 @@ export default function BuildingLayer({
       };
       const ctx = canvas.getContext('2d');
       if (ctx)
-        paint(ctx, size.x, size.y, dpr, affineRef.current, grid, linesByCat, visRef.current, effRef.current);
+        paint(ctx, size.x, size.y, dpr, affineRef.current, grid, linesByCat, visRef.current, effRef.current, opacityRef.current);
     }
     redrawRef.current = reset;
 
@@ -474,10 +475,10 @@ export default function BuildingLayer({
     };
   }, [map, grid, linesByCat, onSelect]);
 
-  // Repaint when visibility or efficiency state changes (no map event fires for these).
+  // Repaint when visibility, efficiency, or opacity changes (no map event fires for these).
   useEffect(() => {
     redrawRef.current();
-  }, [visibility, efficiency, showEfficiency, selectedId]);
+  }, [visibility, efficiency, showEfficiency, selectedId, opacity]);
 
   if (!hover) return null;
   const { b } = hover;
