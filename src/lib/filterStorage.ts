@@ -12,6 +12,7 @@ const HEIGHT_KEY = 'satisfactory-map:show-height';
 const AUTO_REFRESH_KEY = 'satisfactory-map:auto-refresh';
 const AUTO_REFRESH_INTERVAL_KEY = 'satisfactory-map:auto-refresh-interval';
 const BUILDING_OPACITY_KEY = 'satisfactory-map:building-opacity';
+const SHOW_DISCONNECTIONS_KEY = 'satisfactory-map:show-disconnections';
 const SEEN_PODS_KEY = 'satisfactory-map:seen-drop-pod-ids';
 
 type ResourcePurityState = Record<string, Record<ResourcePurity, boolean>>;
@@ -113,12 +114,21 @@ export function saveAutoRefreshInterval(v: AutoRefreshInterval): void {
 
 export function loadBuildingOpacity(): number {
   const v = read<number>(BUILDING_OPACITY_KEY);
-  // Default 0.4 matches the hardcoded FILL_ALPHA the canvas used before the slider existed.
-  return typeof v === 'number' && v >= 0 && v <= 1 ? v : 0.4;
+  return typeof v === 'number' && v >= 0 && v <= 1 ? v : 0.5;
 }
 
 export function saveBuildingOpacity(v: number): void {
   write(BUILDING_OPACITY_KEY, v);
+}
+
+// --- Show disconnections toggle ---
+
+export function loadShowDisconnections(): boolean {
+  return read<boolean>(SHOW_DISCONNECTIONS_KEY) ?? false;
+}
+
+export function saveShowDisconnections(value: boolean): void {
+  write(SHOW_DISCONNECTIONS_KEY, value);
 }
 
 // --- Seen DropPod instance names (for deconstructed-pod detection across saves) ---

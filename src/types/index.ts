@@ -270,9 +270,11 @@ export interface FactoryNode {
   boost: number;         // mProductionBoost / somersloop multiplier (1.0 when unset)
   productivity: number | null; // game's measured uptime 0..1, or null if unknown
   resourceNodeId?: string;     // extractors: mExtractableResource pathName
-  openInputs: number;   // count of unconnected Input#/PipeInputFactory# ports
-  openOutputs: number;  // count of unconnected Output#/PipeOutputFactory# ports
-  hasPower: boolean;    // false only when a FGPowerConnectionComponent is found with no mPowerCircuit
+  openInputs: number;      // count of unconnected Input#/PipeInputFactory# ports
+  openOutputs: number;     // count of unconnected Output#/PipeOutputFactory# ports
+  connectedInputs: number;  // count of connected Input#/PipeInputFactory# ports
+  connectedOutputs: number; // count of connected Output#/PipeOutputFactory# ports
+  hasPower: boolean;    // false only when no power cable is attached
 }
 
 export interface FactoryEdge {

@@ -15,6 +15,8 @@ import {
   saveShowHeight,
   loadBuildingOpacity,
   saveBuildingOpacity,
+  loadShowDisconnections,
+  saveShowDisconnections,
 } from '../lib/filterStorage';
 import type {
   LayerState,
@@ -76,7 +78,7 @@ export default function App() {
   >({});
   const [recipeData, setRecipeData] = useState<RecipeData | null>(null);
   const [showEfficiency, setShowEfficiency] = useState(false);
-  const [showDisconnections, setShowDisconnections] = useState(false);
+  const [showDisconnections, setShowDisconnections] = useState(loadShowDisconnections);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
   const [buildingOpacity, setBuildingOpacity] = useState<number>(loadBuildingOpacity);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -171,7 +173,12 @@ export default function App() {
     return result.factory.nodes.filter(
       (n) =>
         (n.kind === 'factory' || n.kind === 'extractor') &&
-        (n.openInputs > 0 || n.openOutputs > 0 || !n.hasPower),
+        !/FrackingCore/i.test(n.cls) &&
+        (
+          !n.hasPower ||
+          (n.openInputs > 0 && n.connectedInputs === 0) ||
+          (n.openOutputs > 0 && n.connectedOutputs === 0)
+        ),
     ).length;
   }, [result?.factory]);
 
@@ -311,7 +318,7 @@ export default function App() {
           onSelectBuilding={setSelectedBuildingId}
           onCloseSelected={() => setSelectedBuildingId(null)}
           showDisconnections={showDisconnections}
-          onToggleDisconnections={() => setShowDisconnections((v) => !v)}
+          onToggleDisconnections={() => setShowDisconnections((v) => { saveShowDisconnections(!v); return !v; })}
           disconnectionCount={disconnectionCount}
         />
       </div>

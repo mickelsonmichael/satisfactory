@@ -11,11 +11,20 @@ interface Props {
   onSelectBuilding?: (id: string) => void;
 }
 
-// Only production machines are checked — splitters/mergers/storage often have intentionally
-// open ports; generators produce power so hasPower doesn't apply to them.
+// Only production machines and extractors are checked — they always require power.
 const CHECKED_KINDS = new Set(['factory', 'extractor']);
+// FrackingCore is a passive well-centre node; the satellite FrackingSmasher units
+// carry the power connections, so the core itself should not be flagged.
+const EXCLUDED_CLS_RE = /FrackingCore/i;
 
-const CONN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="12" height="12">
+// Broken lightning bolt: two halves of a standard bolt with a visible gap.
+const BROKEN_BOLT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="13" height="13">
+  <path fill="#fff" d="M12 2L4.5 11H9.5L12 2Z"/>
+  <path fill="#fff" d="M10.5 14L8.5 19.5L16.5 11H11.5L10.5 14Z"/>
+</svg>`;
+
+// Broken chain link: two rectangles with broken link lines between them.
+const BROKEN_CONN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="12" height="12">
   <g fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
     <rect x="1" y="6.5" width="7" height="7" rx="2.5"/>
     <rect x="12" y="6.5" width="7" height="7" rx="2.5"/>
@@ -24,25 +33,16 @@ const CONN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" wi
   </g>
 </svg>`;
 
-const POWER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="11" height="11">
-  <path fill="#fff" d="M11.5 1.5 3 11h7L8.5 18.5 17 9h-7z"/>
-</svg>`;
-
-function makeIcon(kind: 'conn' | 'power' | 'both') {
-  const bg = kind === 'power' ? '#dc2626' : '#f97316';
-  const svg = kind === 'power' ? POWER_SVG : CONN_SVG;
-  // Small orange badge on top-right when both issues present on a single building.
-  const badge =
-    kind === 'both'
-      ? `<div style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:#dc2626;border-radius:50%;border:1.5px solid #fff;"></div>`
-      : '';
-  const html = `<div style="position:relative;width:26px;height:26px;background:${bg};border-radius:50%;border:2px solid rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.55);">${svg}${badge}</div>`;
+function makeIcon(bg: string, svg: string, badge?: string) {
+  const html = `<div style="position:relative;width:26px;height:26px;background:${bg};border-radius:50%;border:2px solid rgba(255,255,255,0.85);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.55);">${svg}${badge ?? ''}</div>`;
   return L.divIcon({ html, className: '', iconSize: [26, 26], iconAnchor: [13, 13] });
 }
 
-const ICON_CONN = makeIcon('conn');
-const ICON_POWER = makeIcon('power');
-const ICON_BOTH = makeIcon('both');
+const BADGE = `<div style="position:absolute;top:-4px;right:-4px;width:10px;height:10px;background:#dc2626;border-radius:50%;border:1.5px solid #fff;"></div>`;
+
+const ICON_POWER = makeIcon('#dc2626', BROKEN_BOLT_SVG);
+const ICON_CONN  = makeIcon('#f97316', BROKEN_CONN_SVG);
+const ICON_BOTH  = makeIcon('#f97316', BROKEN_CONN_SVG, BADGE);
 
 export default function DisconnectionLayer({ factory, visible, onSelectBuilding }: Props) {
   const issues = useMemo(() => {
@@ -50,7 +50,15 @@ export default function DisconnectionLayer({ factory, visible, onSelectBuilding 
     return factory.nodes.filter(
       (n) =>
         CHECKED_KINDS.has(n.kind) &&
-        (n.openInputs > 0 || n.openOutputs > 0 || !n.hasPower),
+        !EXCLUDED_CLS_RE.test(n.cls) &&
+        (
+          // Power: no cable at all
+          !n.hasPower ||
+          // Inputs: machine has input ports but zero are connected (recipe doesn't excuse ALL being open)
+          (n.openInputs > 0 && n.connectedInputs === 0) ||
+          // Outputs: same logic for output side
+          (n.openOutputs > 0 && n.connectedOutputs === 0)
+        ),
     );
   }, [factory]);
 
@@ -60,10 +68,11 @@ export default function DisconnectionLayer({ factory, visible, onSelectBuilding 
     <LayerGroup>
       {issues.map((node) => {
         const [lat, lng] = gameToLatLng(node.x, node.y);
-        const hasConnIssue = node.openInputs > 0 || node.openOutputs > 0;
+        const hasConnIssue =
+          (node.openInputs > 0 && node.connectedInputs === 0) ||
+          (node.openOutputs > 0 && node.connectedOutputs === 0);
         const hasPowerIssue = !node.hasPower;
-        const iconKind = hasConnIssue && hasPowerIssue ? 'both' : hasPowerIssue ? 'power' : 'conn';
-        const icon = iconKind === 'both' ? ICON_BOTH : iconKind === 'power' ? ICON_POWER : ICON_CONN;
+        const icon = hasConnIssue && hasPowerIssue ? ICON_BOTH : hasPowerIssue ? ICON_POWER : ICON_CONN;
 
         return (
           <Marker key={node.id} position={[lat, lng]} icon={icon} zIndexOffset={500}>
@@ -76,7 +85,7 @@ export default function DisconnectionLayer({ factory, visible, onSelectBuilding 
                 {hasPowerIssue && (
                   <div style={{ color: '#f87171', marginBottom: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
                     <span>⚡</span>
-                    <span>No power connection</span>
+                    <span>No power cable connected</span>
                   </div>
                 )}
                 {node.openInputs > 0 && (
@@ -91,9 +100,7 @@ export default function DisconnectionLayer({ factory, visible, onSelectBuilding 
                 )}
 
                 <div style={{ marginTop: 8, borderTop: '1px solid #444', paddingTop: 6, color: '#999', fontSize: 11 }}>
-                  {node.clock !== 1 && (
-                    <div>Clock: {Math.round(node.clock * 100)}%</div>
-                  )}
+                  {node.clock !== 1 && <div>Clock: {Math.round(node.clock * 100)}%</div>}
                   <div>X {Math.round(node.x / 100)} m · Y {Math.round(node.y / 100)} m · Z {Math.round(node.z / 100)} m</div>
                 </div>
 
