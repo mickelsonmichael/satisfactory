@@ -95,7 +95,6 @@ interface Hover {
 interface EffView {
   results: Record<string, EfficiencyResult> | null;
   show: boolean;
-  selected: Prep | null;
 }
 
 // Inverse-project a container point back to game coordinates.
@@ -147,6 +146,7 @@ function paint(
   visibility: Record<BuildingCategory, boolean>,
   eff: EffView,
   opacity: number,
+  hovered: Prep | null,
 ): void {
   // Scale all alphas so that opacity=0.4 (default) reproduces the original hardcoded
   // constants and opacity=1.0 makes everything fully opaque.
@@ -272,11 +272,11 @@ function paint(
   }
   c.globalAlpha = 1;
 
-  // Selection highlight — a bright outline (plus a slightly larger halo) around the picked
-  // building so it stands out against the tier coloring.
-  if (eff.selected) {
+  // Hover highlight — a bright outline (plus a slightly larger halo) around the building
+  // under the cursor so it stands out against the tier coloring.
+  if (hovered) {
     const ring = new Path2D();
-    addRect(ring, aff, eff.selected);
+    addRect(ring, aff, hovered);
     c.lineJoin = 'round';
     c.globalAlpha = 1;
     c.lineWidth = 3;
@@ -305,7 +305,8 @@ export default function BuildingLayer({
   const visRef = useRef(visibility);
   const opacityRef = useRef(opacity);
   const redrawRef = useRef<() => void>(() => {});
-  const hoverIdRef = useRef<Building | null>(null);
+  const hoverIdRef = useRef<Prep | null>(null);
+  const popoverBuildingRef = useRef<Building | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
 
   // Keep live refs fresh so map-event handlers always read the latest props.
@@ -325,13 +326,6 @@ export default function BuildingLayer({
     return g;
   }, [buildings]);
 
-  // id -> Prep, for resolving the selected building (highlight) without scanning the grid.
-  const prepById = useMemo(() => {
-    const m = new Map<string, Prep>();
-    for (const bucket of grid.values()) for (const p of bucket) if (p.id) m.set(p.id, p);
-    return m;
-  }, [grid]);
-
   // Group connection lines by category so the renderer strokes each category in one batch.
   const linesByCat = useMemo(() => {
     const m = {
@@ -343,11 +337,10 @@ export default function BuildingLayer({
   }, [lines]);
 
   // Live refs so the map-event handlers (registered once) always read the latest props.
-  const effRef = useRef<EffView>({ results: efficiency, show: showEfficiency, selected: null });
+  const effRef = useRef<EffView>({ results: efficiency, show: showEfficiency });
   effRef.current = {
     results: efficiency,
     show: showEfficiency,
-    selected: selectedId ? (prepById.get(selectedId) ?? null) : null,
   };
 
   useEffect(() => {
@@ -362,6 +355,19 @@ export default function BuildingLayer({
     canvas.style.top = '0';
     map.getPanes().overlayPane.appendChild(canvas);
     canvasRef.current = canvas;
+
+    // Light repaint — reuses the current affine without resizing or repositioning the canvas.
+    // Called on mousemove so the hover outline updates cheaply without a full reset.
+    function repaint() {
+      const aff = affineRef.current;
+      if (!aff) return;
+      const size = map.getSize();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const ctx = canvas.getContext('2d');
+      if (ctx)
+        paint(ctx, size.x, size.y, dpr, aff, grid, linesByCat, visRef.current, effRef.current, opacityRef.current, hoverIdRef.current);
+    }
+    redrawRef.current = repaint;
 
     // Pin the canvas to the top-left of the viewport (in layer coords) so it pans with the
     // map between redraws, then draw every footprint in container-pixel space.
@@ -393,11 +399,8 @@ export default function BuildingLayer({
         c: p0.x,
         f: p0.y,
       };
-      const ctx = canvas.getContext('2d');
-      if (ctx)
-        paint(ctx, size.x, size.y, dpr, affineRef.current, grid, linesByCat, visRef.current, effRef.current, opacityRef.current);
+      repaint();
     }
-    redrawRef.current = reset;
 
     // Pick the smallest hoverable building under a container point (a machine wins over the
     // foundation beneath it).
@@ -430,45 +433,68 @@ export default function BuildingLayer({
       return best;
     }
 
-    // Hover: the tooltip is pinned to the building center and only updates when the hovered
-    // building changes, so moving the mouse doesn't re-render every frame.
+    // Hover: update the canvas outline when the building under the cursor changes.
+    // Only repaints when the hovered building changes, so rapid mouse movement doesn't churn.
     function onMove(e: L.LeafletMouseEvent) {
-      const aff = affineRef.current;
-      if (!aff) return;
       const best = pick(e.containerPoint.x, e.containerPoint.y);
-      if (best === hoverIdRef.current) return; // same building (or still nothing) — no churn
+      if (best === hoverIdRef.current) return;
       hoverIdRef.current = best;
-      if (!best) {
-        setHover(null);
-      } else {
-        const px = aff.a * best.x + aff.b * best.y + aff.c;
-        const py = aff.d * best.x + aff.e * best.y + aff.f;
-        setHover({ b: best, px, py });
-      }
+      repaint();
     }
 
-    // Click: select the machine under the cursor (or clear selection on empty ground).
+    // Click: show the popover for the building under the cursor, or close it on empty ground.
+    // Close any open Leaflet popup first so only one popover is visible at a time.
     function onClick(e: L.LeafletMouseEvent) {
       const best = pick(e.containerPoint.x, e.containerPoint.y);
       onSelect(best?.id ?? null);
+      popoverBuildingRef.current = best;
+      if (!best) {
+        setHover(null);
+      } else {
+        map.closePopup();
+        const [lat, lng] = gameToLatLng(best.x, best.y);
+        const pt = map.latLngToContainerPoint([lat, lng]);
+        setHover({ b: best, px: pt.x, py: pt.y });
+      }
     }
 
+    // When a Leaflet popup (resource/disconnection marker) opens, close the building popover.
+    function onPopupOpen() {
+      popoverBuildingRef.current = null;
+      setHover(null);
+      onSelect(null);
+    }
+
+    // Pan/zoom: keep the popover pinned to its building's current screen position.
+    function onMapMove() {
+      const b = popoverBuildingRef.current;
+      if (!b) return;
+      const [lat, lng] = gameToLatLng(b.x, b.y);
+      const pt = map.latLngToContainerPoint([lat, lng]);
+      setHover((prev) => (prev ? { ...prev, px: pt.x, py: pt.y } : null));
+    }
+
+    // Mouseout: clear the hover outline only — the click popover persists until dismissed.
     const clear = () => {
       hoverIdRef.current = null;
-      setHover(null);
+      repaint();
     };
 
     map.on('moveend zoomend resize', reset);
+    map.on('move zoom', onMapMove);
     map.on('mousemove', onMove);
     map.on('mouseout', clear);
     map.on('click', onClick);
+    map.on('popupopen', onPopupOpen);
     reset();
 
     return () => {
       map.off('moveend zoomend resize', reset);
+      map.off('move zoom', onMapMove);
       map.off('mousemove', onMove);
       map.off('mouseout', clear);
       map.off('click', onClick);
+      map.off('popupopen', onPopupOpen);
       canvas.remove();
       canvasRef.current = null;
       redrawRef.current = () => {};
@@ -478,11 +504,16 @@ export default function BuildingLayer({
   // Repaint when visibility, efficiency, or opacity changes (no map event fires for these).
   useEffect(() => {
     redrawRef.current();
-  }, [visibility, efficiency, showEfficiency, selectedId, opacity]);
+  }, [visibility, efficiency, showEfficiency, opacity]);
 
   if (!hover) return null;
   const { b } = hover;
   const eff = showEfficiency && b.id ? efficiency?.[b.id] : undefined;
+  function closePopover() {
+    popoverBuildingRef.current = null;
+    setHover(null);
+    onSelect(null);
+  }
   return (
     <div
       className="sf-building-tip"
@@ -493,8 +524,11 @@ export default function BuildingLayer({
         transform: 'translateX(-50%) translateY(-100%)',
       } as React.CSSProperties}
     >
-      <div className="sf-pop-title" style={{ color: CAT_COLOR[b.category] }}>
-        {humanize(b.cls)}
+      <div className="sf-pop-header">
+        <div className="sf-pop-title" style={{ color: CAT_COLOR[b.category] }}>
+          {humanize(b.cls)}
+        </div>
+        <button className="sf-pop-close" onClick={closePopover}>×</button>
       </div>
       <div className="sf-building-tip-cat">{CAT_LABEL[b.category]}</div>
       {b.recipe && (

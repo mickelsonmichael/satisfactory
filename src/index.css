@@ -176,7 +176,6 @@ html, body, #root {
 .sf-building-tip {
   position: absolute;
   z-index: 650; /* above markerPane, below the controls panel */
-  pointer-events: none;
   min-width: 150px;
   max-width: 260px;
   padding: 9px 11px;
