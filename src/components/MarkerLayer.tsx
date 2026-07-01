@@ -92,7 +92,7 @@ export default function MarkerLayer({
           position={[m.lat, m.lng]}
           icon={getIcon(type, false, showHeight ? heightLabel(m.z) : null, iconSize)}
         >
-          <Popup className="sf-popup">
+          <Popup className="sf-popup" autoPan={false}>
             <div className="sf-pop-header">
               <div className="sf-pop-title">{label}</div>
               <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>
@@ -128,7 +128,7 @@ export default function MarkerLayer({
           position={[m.lat, m.lng]}
           icon={getIcon(type, true, showHeight ? heightLabel(m.z) : null, iconSize)}
         >
-          <Popup className="sf-popup">
+          <Popup className="sf-popup" autoPan={false}>
             <div className="sf-pop-header">
               <div className="sf-pop-title">{label}</div>
               <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>

@@ -77,7 +77,7 @@ export default function DisconnectionLayer({ factory, visible, onSelectBuilding 
 
         return (
           <Marker key={node.id} position={[lat, lng]} icon={icon} zIndexOffset={500}>
-            <Popup className="sf-popup">
+            <Popup className="sf-popup" autoPan={false}>
               <div className="sf-pop-header">
                 <div className="sf-pop-title">{humanize(node.cls)}</div>
                 <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>
