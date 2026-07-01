@@ -170,6 +170,16 @@ export interface Manifest {
   saves: ManifestSave[];
 }
 
+export interface InventoryItem {
+  item: string;   // shortClass, e.g. 'Desc_IronPlate_C'
+  amount: number;
+}
+
+export interface BuildingInventory {
+  items: InventoryItem[];
+  full: boolean; // true when every slot across all inventory components is occupied
+}
+
 export interface ParseResult {
   // All markers from the static game database, with collected status from the save file.
   // Markers in unvisited level chunks have collected=false (we can't distinguish
@@ -195,6 +205,10 @@ export interface ParseResult {
   // vanish from both objects and collectables due to a game bug) can still be detected
   // as collected in future parses.
   dropPodIds: string[];
+  // Inventory contents per machine/container, keyed by Building.id (actor instanceName).
+  // Items are aggregated by class (multiple slots of the same item are summed), sorted
+  // by amount descending. Only actors that have non-empty inventory are present.
+  inventories: Map<string, BuildingInventory>;
 }
 
 // --- Save statistics (Stats tab) ---

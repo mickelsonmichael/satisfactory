@@ -296,3 +296,44 @@ html, body, #root {
   text-transform: uppercase;
   color: #8a93a6;
 }
+
+/* Inventory contents section inside the building popover */
+.sf-building-tip-inv {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #383d45;
+}
+.sf-building-tip-inv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.sf-building-tip-inv-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.sf-building-tip-inv-full {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+.sf-building-tip-inv-more {
+  margin-top: 5px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  color: #fa9549;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.sf-building-tip-inv-more:hover { color: #ffb066; }

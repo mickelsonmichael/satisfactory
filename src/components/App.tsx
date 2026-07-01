@@ -39,9 +39,10 @@ import StatsPanel from './StatsPanel';
 import RecipesPanel from './RecipesPanel';
 import SettingsPanel from './SettingsPanel';
 
-// Stable empty arrays used before a save loads, so building prop references stay constant.
+// Stable empty values used before a save loads so prop references stay constant.
 const EMPTY_BUILDINGS: Building[] = [];
 const EMPTY_LINES: BuildingLine[] = [];
+const EMPTY_INVENTORIES: Map<string, import('../types').BuildingInventory> = new Map();
 
 function initLayerStates(): LayerState[] {
   const saved = loadVisibleCollectibles();
@@ -287,6 +288,7 @@ export default function App() {
           showEfficiency={showEfficiency}
           selectedBuildingId={selectedBuildingId}
           onSelectBuilding={setSelectedBuildingId}
+          inventories={result?.inventories ?? EMPTY_INVENTORIES}
           factory={result?.factory ?? null}
           showDisconnections={showDisconnections}
           buildingOpacity={buildingOpacity}

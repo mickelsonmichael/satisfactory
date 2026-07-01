@@ -1,10 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
-import type { Building, BuildingLine, BuildingCategory, EfficiencyResult } from '../types';
+import type { Building, BuildingInventory, BuildingLine, BuildingCategory, EfficiencyResult } from '../types';
 import { gameToLatLng } from '../lib/coordinates';
 import { BUILDING_CATEGORIES, humanize } from '../lib/buildings';
 import { headlineUtil, STATUS_COLOR, STATUS_LABEL, utilColor } from '../lib/efficiencyDisplay';
+
+const ITEM_ICON_OVERRIDE: Record<string, string> = {
+  'Quickwire':              'IconDesc_HighSpeedWire_256',
+  'Screw':                  'IconDesc_IronScrew_256',
+  'Black Powder':           'IconDesc_Gunpowder_256',
+  'Alclad Aluminum Sheet':  'IconDesc_AluminumPlate_256',
+  'Heavy Modular Frame':    'IconDesc_ModularFrameHeavy_256',
+  'Solid Biofuel':          'IconDesc_Biofuel_256',
+};
+
+function itemIconSrc(humanName: string): string {
+  const override = ITEM_ICON_OVERRIDE[humanName];
+  if (override) return `icons/items/${override}.png`;
+  const camel = humanName
+    .replace(/[-\s]+(.)/g, (_, c: string) => c.toUpperCase())
+    .replace(/^(.)/, (_, c: string) => c.toUpperCase());
+  return `icons/items/IconDesc_${camel}_256.png`;
+}
 
 interface Props {
   buildings: Building[];
@@ -12,6 +30,8 @@ interface Props {
   lines: BuildingLine[];
   // Which categories are shown. A building draws only when its category is true here.
   visibility: Record<BuildingCategory, boolean>;
+  // Inventory contents per building, keyed by Building.id.
+  inventories: Map<string, BuildingInventory>;
   // Efficiency results keyed by building id (null unless the toggle is on).
   efficiency: Record<string, EfficiencyResult> | null;
   showEfficiency: boolean;
@@ -293,6 +313,7 @@ export default function BuildingLayer({
   buildings,
   lines,
   visibility,
+  inventories,
   efficiency,
   showEfficiency,
   selectedId: _selectedId,
@@ -308,6 +329,15 @@ export default function BuildingLayer({
   const hoverIdRef = useRef<Prep | null>(null);
   const popoverBuildingRef = useRef<Building | null>(null);
   const [hover, setHover] = useState<Hover | null>(null);
+  // Tracks which building's inventory "show more" is expanded. Switching buildings
+  // auto-collapses because the new b.id won't match this stored id.
+  const [expandedInventoryId, setExpandedInventoryId] = useState<string | null>(null);
+  // Leaflet listens to native DOM events, so React's synthetic stopPropagation has no
+  // effect. Attach a native Leaflet click guard to the popover div via a callback ref
+  // so clicks inside the panel never reach the map's click handler.
+  const popoverRef = React.useCallback((node: HTMLDivElement | null) => {
+    if (node) L.DomEvent.disableClickPropagation(node);
+  }, []);
 
   // Keep live refs fresh so map-event handlers always read the latest props.
   opacityRef.current = opacity;
@@ -509,6 +539,10 @@ export default function BuildingLayer({
   if (!hover) return null;
   const { b } = hover;
   const eff = showEfficiency && b.id ? efficiency?.[b.id] : undefined;
+  const inv = b.id ? inventories.get(b.id) : undefined;
+  const showAllInv = expandedInventoryId === b.id;
+  const SHOW_LIMIT = 5;
+
   function closePopover() {
     popoverBuildingRef.current = null;
     setHover(null);
@@ -516,6 +550,7 @@ export default function BuildingLayer({
   }
   return (
     <div
+      ref={popoverRef}
       className="sf-building-tip"
       style={{
         '--cat-clr': CAT_COLOR[b.category],
@@ -540,6 +575,39 @@ export default function BuildingLayer({
         <div className="sf-building-tip-recipe">
           <span style={{ color: STATUS_COLOR[eff.status] }}>{STATUS_LABEL[eff.status]}</span>{' '}
           {Math.round(headlineUtil(eff) * 100)}% utilized
+        </div>
+      )}
+      {inv && inv.items.length > 0 && (
+        <div className="sf-building-tip-inv">
+          <div className="sf-building-tip-inv-header">
+            <div className="sf-building-tip-inv-label">Contents</div>
+            {inv.full && <span className="sf-building-tip-inv-full">FULL</span>}
+          </div>
+          <div className="sf-pop-cost-section">
+            {(showAllInv ? inv.items : inv.items.slice(0, SHOW_LIMIT)).map(({ item, amount }) => {
+              const name = humanize(item);
+              return (
+                <div key={item} className="sf-pop-cost-row">
+                  <img
+                    src={itemIconSrc(name)}
+                    alt=""
+                    className="sf-pop-cost-icon"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                  <span className="sf-pop-cost-amount">{amount.toLocaleString()}</span>
+                  <span className="sf-pop-cost-name">{name}</span>
+                </div>
+              );
+            })}
+          </div>
+          {!showAllInv && inv.items.length > SHOW_LIMIT && (
+            <button
+              className="sf-building-tip-inv-more"
+              onClick={() => setExpandedInventoryId(b.id ?? null)}
+            >
+              Show {inv.items.length - SHOW_LIMIT} more
+            </button>
+          )}
         </div>
       )}
       <dl className="sf-pop-coords">
