@@ -6,6 +6,23 @@ import { gameToLatLng } from '../lib/coordinates';
 import { getIcon } from '../lib/icons';
 import { humanize } from '../lib/buildings';
 
+// Items whose icon filename doesn't follow the simple CamelCase-the-display-name rule.
+const ITEM_ICON_OVERRIDE: Record<string, string> = {
+  'Quickwire':              'IconDesc_HighSpeedWire_256',
+  'Screw':                  'IconDesc_IronScrew_256',
+  'Black Powder':           'IconDesc_Gunpowder_256',
+  'Alclad Aluminum Sheet':  'IconDesc_AluminumPlate_256',
+  'Heavy Modular Frame':    'IconDesc_ModularFrameHeavy_256',
+  'Solid Biofuel':          'IconDesc_Biofuel_256',
+};
+
+function itemIconSrc(item: string): string {
+  const override = ITEM_ICON_OVERRIDE[item];
+  if (override) return `icons/items/${override}.png`;
+  const camel = item.replace(/[-\s]+(.)/g, (_, c: string) => c.toUpperCase()).replace(/^(.)/, (_, c: string) => c.toUpperCase());
+  return `icons/items/IconDesc_${camel}_256.png`;
+}
+
 interface PositionedMarker extends CollectibleMarker {
   lat: number;
   lng: number;
@@ -97,15 +114,29 @@ export default function MarkerLayer({
               <div className="sf-pop-title">{label}</div>
               <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>
             </div>
-            {m.cost && m.cost.length > 0 && (
-              <dl className="sf-pop-coords sf-pop-cost">
-                {m.cost.map(({ item, amount }) => (
-                  <>
-                    <dt key={`${item}-dt`}>{humanize(item)}</dt>
-                    <dd key={`${item}-dd`}>{amount.toLocaleString()}</dd>
-                  </>
-                ))}
-              </dl>
+            {m.type === 'hardDrive' && (
+              <>
+                <div className="sf-pop-cost-label">Required to open</div>
+                <div className="sf-pop-cost-section">
+                  {(!m.cost || m.cost.length === 0) && !m.power && (
+                    <span className="sf-pop-cost-free">✓ Free</span>
+                  )}
+                  {m.cost?.map(({ item, amount }) => (
+                    <div key={item} className="sf-pop-cost-row">
+                      <img src={itemIconSrc(item)} alt="" className="sf-pop-cost-icon" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <span className="sf-pop-cost-amount">{amount.toLocaleString()}</span>
+                      <span className="sf-pop-cost-name">{humanize(item)}</span>
+                    </div>
+                  ))}
+                  {m.power && (
+                    <div className="sf-pop-cost-row">
+                      <span className="sf-pop-cost-power-icon">⚡</span>
+                      <span className="sf-pop-cost-amount">{m.power}</span>
+                      <span className="sf-pop-cost-name">MW</span>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
             <dl className="sf-pop-coords">
               <dt>X</dt>
@@ -134,15 +165,29 @@ export default function MarkerLayer({
               <button className="sf-pop-close" onClick={() => map.closePopup()}>×</button>
             </div>
             <span className="sf-pop-badge collected">Collected</span>
-            {m.cost && m.cost.length > 0 && (
-              <dl className="sf-pop-coords sf-pop-cost" style={{ opacity: 0.6 }}>
-                {m.cost.map(({ item, amount }) => (
-                  <>
-                    <dt key={`${item}-dt`}>{humanize(item)}</dt>
-                    <dd key={`${item}-dd`}>{amount.toLocaleString()}</dd>
-                  </>
-                ))}
-              </dl>
+            {m.type === 'hardDrive' && (
+              <div style={{ opacity: 0.6 }}>
+                <div className="sf-pop-cost-label">Required to open</div>
+                <div className="sf-pop-cost-section">
+                  {(!m.cost || m.cost.length === 0) && !m.power && (
+                    <span className="sf-pop-cost-free">✓ Free</span>
+                  )}
+                  {m.cost?.map(({ item, amount }) => (
+                    <div key={item} className="sf-pop-cost-row">
+                      <img src={itemIconSrc(item)} alt="" className="sf-pop-cost-icon" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <span className="sf-pop-cost-amount">{amount.toLocaleString()}</span>
+                      <span className="sf-pop-cost-name">{humanize(item)}</span>
+                    </div>
+                  ))}
+                  {m.power && (
+                    <div className="sf-pop-cost-row">
+                      <span className="sf-pop-cost-power-icon">⚡</span>
+                      <span className="sf-pop-cost-amount">{m.power}</span>
+                      <span className="sf-pop-cost-name">MW</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
             <dl className="sf-pop-coords">
               <dt>X</dt>

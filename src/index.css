@@ -154,6 +154,70 @@ html, body, #root {
   background: #383d45;
 }
 
+/* "Required to open" section heading for HDD cost items. */
+.sf-pop-cost-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a919b;
+  margin-top: 9px;
+  padding-top: 8px;
+  position: relative;
+}
+.sf-popup .sf-pop-cost-label::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -16px;
+  right: -16px;
+  height: 1px;
+  background: #383d45;
+}
+
+/* Cost rows (icon + amount + name) */
+.sf-pop-cost-section {
+  margin-top: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sf-pop-cost-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: #f1f3f5;
+}
+.sf-pop-cost-icon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.sf-pop-cost-power-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.sf-pop-cost-amount {
+  font-family: 'Consolas', 'SFMono-Regular', monospace;
+  font-weight: 700;
+  color: #f1f3f5;
+}
+.sf-pop-cost-name {
+  color: #b6bcc5;
+}
+.sf-pop-cost-free {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6fcf6f;
+}
+
 /* Disconnection issue indicators */
 .sf-pop-issue-power {
   display: flex;

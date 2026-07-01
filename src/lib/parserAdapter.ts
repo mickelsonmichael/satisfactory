@@ -172,39 +172,11 @@ export async function parseSaveFile(
   // and Amount (int). The parser may expose the array under .value or .values, and each
   // struct element's fields may or may not be wrapped in an extra .value layer, so we
   // try both access patterns defensively.
+  // mActivationCost is defined in the Blueprint asset, not serialized as save-file
+  // instance data, so it cannot be read from the save. Costs are stored as static
+  // data in collectibles.json (the `cost` field on each hard-drive marker) and
+  // passed through via StaticMarker below.
   const dropPodCosts = new Map<string, Array<{ item: string; amount: number }>>();
-  for (const l of levels) {
-    for (const o of l.objects ?? []) {
-      if (!o.typePath?.includes('BP_DropPod')) continue;
-      const prop = o.properties?.['mActivationCost'] as
-        | { value?: unknown; values?: unknown[] }
-        | undefined;
-      if (!prop) continue;
-      const entries: unknown[] = Array.isArray(prop.value)
-        ? prop.value
-        : Array.isArray(prop.values)
-        ? prop.values
-        : [];
-      const cost = entries.flatMap((entry: unknown) => {
-        // Struct may be the entry itself, or nested in entry.value
-        const s = (entry as { value?: unknown })?.value ?? entry;
-        if (!s || typeof s !== 'object') return [];
-        // ItemClass is an ObjectRef (pathName) possibly under .value
-        const cls = s as { ItemClass?: unknown };
-        const ref = cls.ItemClass as { pathName?: string; value?: { pathName?: string } } | undefined;
-        const path = ref?.pathName ?? ref?.value?.pathName;
-        // Amount is an integer possibly under .value
-        const amtRaw = (s as { Amount?: unknown }).Amount;
-        const amount = typeof amtRaw === 'number' ? amtRaw
-          : typeof (amtRaw as { value?: unknown })?.value === 'number'
-          ? (amtRaw as { value: number }).value : 0;
-        if (!path || amount <= 0) return [];
-        const itemCls = path.split('.').pop() ?? '';
-        return itemCls ? [{ item: itemCls, amount }] : [];
-      });
-      if (cost.length > 0) dropPodCosts.set(o.instanceName, cost);
-    }
-  }
 
   // Resource nodes a player has built an extractor on are "claimed". Miners, oil pumps,
   // and resource-well extractors all point at their node/satellite via the
@@ -298,7 +270,8 @@ export async function parseSaveFile(
       collectedPaths.has(sm.id) ||
       lootedDropPodPaths.has(sm.id) ||
       (sm.type === 'hardDrive' && seenDropPodIds.has(sm.id) && !allDropPodIds.has(sm.id)),
-    cost: sm.type === 'hardDrive' ? dropPodCosts.get(sm.id) : undefined,
+    cost: sm.type === 'hardDrive' ? (sm.cost ?? dropPodCosts.get(sm.id)) : undefined,
+    power: sm.type === 'hardDrive' ? sm.power : undefined,
   }));
 
   // Extract purchased/unlocked schematics from the SchematicManager. The manager object
