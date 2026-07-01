@@ -9,7 +9,7 @@ interface Props {
   onBuildingOpacityChange: (v: number) => void;
 }
 
-const INTERVALS: AutoRefreshInterval[] = [5, 15, 30, 45, 60];
+const INTERVALS: AutoRefreshInterval[] = [5, 15, 30, 60];
 
 const PANEL_W = 300;
 
@@ -116,45 +116,46 @@ export default function SettingsPanel({ open, onClose, buildingOpacity, onBuildi
               </span>
             </div>
 
-            <label
-              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12 }}
-              title="Periodically re-check for a newer save and load it automatically"
-            >
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={() => setAutoRefresh(!autoRefresh)}
-                style={{ accentColor: '#FA9549', width: 14, height: 14 }}
-              />
-              <span style={{ color: '#888', fontSize: 12 }}>Enabled</span>
-            </label>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {/* Off button */}
+              <button
+                onClick={() => setAutoRefresh(false)}
+                style={{
+                  flex: 1,
+                  padding: '5px 0',
+                  background: !autoRefresh ? 'rgba(250,149,73,0.15)' : 'none',
+                  border: '1px solid',
+                  borderColor: !autoRefresh ? '#FA9549' : '#333',
+                  borderRadius: 5,
+                  color: !autoRefresh ? '#FA9549' : '#666',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: !autoRefresh ? 700 : 400,
+                }}
+              >
+                Off
+              </button>
 
-            {/* Interval selector */}
-            <div style={{ opacity: autoRefresh ? 1 : 0.35, transition: 'opacity 0.15s' }}>
-              <div style={{ color: '#666', fontSize: 11, marginBottom: 6 }}>Interval</div>
-              <div style={{ display: 'flex', gap: 4 }}>
-                {INTERVALS.map((m) => (
-                  <button
-                    key={m}
-                    disabled={!autoRefresh}
-                    onClick={() => setAutoRefreshInterval(m)}
-                    style={{
-                      flex: 1,
-                      padding: '5px 0',
-                      background: autoRefreshInterval === m ? 'rgba(250,149,73,0.15)' : 'none',
-                      border: '1px solid',
-                      borderColor: autoRefreshInterval === m ? '#FA9549' : '#333',
-                      borderRadius: 5,
-                      color: autoRefreshInterval === m ? '#FA9549' : '#666',
-                      cursor: autoRefresh ? 'pointer' : 'default',
-                      fontSize: 11,
-                      fontWeight: autoRefreshInterval === m ? 700 : 400,
-                    }}
-                  >
-                    {m}m
-                  </button>
-                ))}
-              </div>
+              {INTERVALS.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { setAutoRefresh(true); setAutoRefreshInterval(m); }}
+                  style={{
+                    flex: 1,
+                    padding: '5px 0',
+                    background: autoRefresh && autoRefreshInterval === m ? 'rgba(250,149,73,0.15)' : 'none',
+                    border: '1px solid',
+                    borderColor: autoRefresh && autoRefreshInterval === m ? '#FA9549' : '#333',
+                    borderRadius: 5,
+                    color: autoRefresh && autoRefreshInterval === m ? '#FA9549' : '#666',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: autoRefresh && autoRefreshInterval === m ? 700 : 400,
+                  }}
+                >
+                  {m}m
+                </button>
+              ))}
             </div>
           </div>
 

@@ -98,8 +98,8 @@ export function saveAutoRefresh(value: boolean): void {
 
 // --- Auto-refresh interval in minutes ---
 
-export type AutoRefreshInterval = 5 | 15 | 30 | 45 | 60;
-const VALID_INTERVALS: AutoRefreshInterval[] = [5, 15, 30, 45, 60];
+export type AutoRefreshInterval = 5 | 15 | 30 | 60;
+const VALID_INTERVALS: AutoRefreshInterval[] = [5, 15, 30, 60];
 
 export function loadAutoRefreshInterval(): AutoRefreshInterval {
   const v = read<number>(AUTO_REFRESH_INTERVAL_KEY);
