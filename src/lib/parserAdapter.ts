@@ -1,5 +1,5 @@
 import { Parser } from '@etothepii/satisfactory-file-parser';
-import type { Building, BuildingLine, CollectibleMarker, ParseResult, StaticMarker } from '../types';
+import type { Building, BuildingInventory, BuildingLine, CollectibleMarker, InventoryItem, ParseResult, StaticMarker } from '../types';
 import { computeStats } from './stats';
 import { buildFactoryGraph } from './factoryGraph';
 import { classify, footprintFor, humanizeRecipe, shortClass } from './buildings';
@@ -38,6 +38,12 @@ interface SaveObject {
     type?: string;
     buildables?: BuildableEntry[];
   };
+}
+
+// Actor instanceName for a component instanceName ("…Build_X_C_1.StorageInventory" → "…Build_X_C_1").
+function parentOf(instanceName: string): string {
+  const i = instanceName.lastIndexOf('.');
+  return i >= 0 ? instanceName.slice(0, i) : instanceName;
 }
 
 // Yaw (rotation about Z) in radians from a quaternion. Buildings only rotate about the
@@ -254,6 +260,50 @@ export async function parseSaveFile(
     }
   }
 
+  // Inventory contents: scan every object for mInventoryStacks (present on
+  // FGInventoryComponent sub-objects). The component's instanceName parent (strip last
+  // ".ComponentName") is the machine actor's instanceName, which matches Building.id.
+  // Items are aggregated by class and sorted by amount descending.
+  // "full" = every slot in at least one inventory component is occupied, meaning nothing
+  // more can enter. Machines can have multiple components (input/output); any component
+  // being fully occupied sets the flag (e.g. a backed-up output inventory).
+  const rawInventories = new Map<string, Map<string, number>>();
+  const fullActors = new Set<string>();
+  for (const l of levels) {
+    for (const o of l.objects ?? []) {
+      const stacksProp = o.properties?.['mInventoryStacks'];
+      if (!stacksProp) continue;
+      const values = (stacksProp as { values?: unknown[] }).values ?? [];
+      if (values.length === 0) continue;
+      const actorId = parentOf(o.instanceName);
+      let occupiedSlots = 0;
+      for (const stackVal of values) {
+        const sv = stackVal as { properties?: Record<string, unknown> } | undefined;
+        // Item is a StructProperty whose value is FInventoryItem { itemReference: ObjectReference }.
+        const itemProp = sv?.properties?.['Item'] as { value?: { itemReference?: { pathName?: string } } } | undefined;
+        const itemPath = itemProp?.value?.itemReference?.pathName;
+        const numItems = (sv?.properties?.['NumItems'] as { value?: unknown } | undefined)?.value;
+        if (itemPath && typeof numItems === 'number' && numItems > 0) {
+          occupiedSlots++;
+          const cls = shortClass(itemPath);
+          let actorMap = rawInventories.get(actorId);
+          if (!actorMap) { actorMap = new Map(); rawInventories.set(actorId, actorMap); }
+          actorMap.set(cls, (actorMap.get(cls) ?? 0) + numItems);
+        }
+      }
+      if (occupiedSlots >= values.length) fullActors.add(actorId);
+    }
+  }
+  const inventories = new Map<string, BuildingInventory>();
+  for (const [actorId, itemMap] of rawInventories) {
+    inventories.set(actorId, {
+      items: [...itemMap.entries()]
+        .map(([item, amount]) => ({ item, amount }))
+        .sort((a, b) => b.amount - a.amount),
+      full: fullActors.has(actorId),
+    });
+  }
+
   const markers: CollectibleMarker[] = staticMarkers.map((sm) => ({
     id: sm.id,
     type: sm.type,
@@ -329,5 +379,6 @@ export async function parseSaveFile(
     ),
     unlockedSchematics: [...unlockedSchematicSet],
     dropPodIds: [...allDropPodIds],
+    inventories,
   };
 }
