@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { parseSaveFile } from '../lib/parserAdapter';
+import { getCached, makeCacheKey, putCached } from '../lib/parseCache';
 import type { ParseResult, StaticMarker } from '../types';
 
 interface UseSaveParserResult {
@@ -51,18 +52,32 @@ export function useSaveParser(
 
         if (abort.signal.aborted) return;
 
-        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+        const cacheKey = makeCacheKey(filename, buffer.byteLength);
+        const cached = await getCached(cacheKey);
 
-        const parsed = await parseSaveFile(
-          filename,
-          buffer,
-          staticMarkers,
-          seenDropPodIds,
-          (pct, msg) => {
-            setProgress(pct);
-            setProgressMsg(msg);
-          },
-        );
+        if (abort.signal.aborted) return;
+
+        let parsed: ParseResult;
+        if (cached) {
+          parsed = cached;
+        } else {
+          await new Promise<void>((resolve) => setTimeout(resolve, 10));
+
+          parsed = await parseSaveFile(
+            filename,
+            buffer,
+            staticMarkers,
+            seenDropPodIds,
+            (pct, msg) => {
+              setProgress(pct);
+              setProgressMsg(msg);
+            },
+          );
+
+          if (abort.signal.aborted) return;
+          // Fire-and-forget — a write failure must not break the UI.
+          void putCached(cacheKey, parsed);
+        }
 
         if (abort.signal.aborted) return;
         setResult(parsed);
