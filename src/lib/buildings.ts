@@ -117,7 +117,7 @@ export function footprintFor(cls: string): Size {
 // Splits camelCase boundaries only, so dimension tokens like "8x4" / "Mk3" stay intact.
 export function humanize(cls: string): string {
   return cls
-    .replace(/^Build_/, '')
+    .replace(/^(?:Build_|Desc_)/, '')
     .replace(/_C$/, '')
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')

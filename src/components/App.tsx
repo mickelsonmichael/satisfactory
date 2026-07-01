@@ -13,6 +13,10 @@ import {
   saveShowCaves,
   loadShowHeight,
   saveShowHeight,
+  loadBuildingOpacity,
+  saveBuildingOpacity,
+  loadShowDisconnections,
+  saveShowDisconnections,
 } from '../lib/filterStorage';
 import type {
   LayerState,
@@ -33,6 +37,7 @@ import LoadingOverlay, { PageLoader } from './LoadingOverlay';
 import TopNav, { TOP_NAV_HEIGHT } from './TopNav';
 import StatsPanel from './StatsPanel';
 import RecipesPanel from './RecipesPanel';
+import SettingsPanel from './SettingsPanel';
 
 // Stable empty arrays used before a save loads, so building prop references stay constant.
 const EMPTY_BUILDINGS: Building[] = [];
@@ -73,7 +78,10 @@ export default function App() {
   >({});
   const [recipeData, setRecipeData] = useState<RecipeData | null>(null);
   const [showEfficiency, setShowEfficiency] = useState(false);
+  const [showDisconnections, setShowDisconnections] = useState(loadShowDisconnections);
   const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(null);
+  const [buildingOpacity, setBuildingOpacity] = useState<number>(loadBuildingOpacity);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Load static resource node database (independent of the save file).
   useEffect(() => {
@@ -145,6 +153,7 @@ export default function App() {
   useEffect(() => { saveShowCaves(showCaves); }, [showCaves]);
   useEffect(() => { saveShowHeight(showHeight); }, [showHeight]);
   useEffect(() => { saveBuildingVisibility(buildingVisibility); }, [buildingVisibility]);
+  useEffect(() => { saveBuildingOpacity(buildingOpacity); }, [buildingOpacity]);
 
   const efficiency = useMemo(() => {
     if (!showEfficiency || !result?.factory || !recipeData) return null;
@@ -158,6 +167,20 @@ export default function App() {
 
   const selectedResult =
     selectedBuildingId && efficiency ? (efficiency.results[selectedBuildingId] ?? null) : null;
+
+  const disconnectionCount = useMemo(() => {
+    if (!result?.factory) return 0;
+    return result.factory.nodes.filter(
+      (n) =>
+        (n.kind === 'factory' || n.kind === 'extractor') &&
+        !/FrackingCore/i.test(n.cls) &&
+        (
+          !n.hasPower ||
+          (n.openInputs > 0 && n.connectedInputs === 0) ||
+          (n.openOutputs > 0 && n.connectedOutputs === 0)
+        ),
+    ).length;
+  }, [result?.factory]);
 
   function markCollected(id: string) {
     setLocalCollected((prev) => new Set(prev).add(id));
@@ -224,7 +247,13 @@ export default function App() {
 
   return (
     <>
-      <TopNav />
+      <TopNav onOpenSettings={() => setSettingsOpen(true)} />
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        buildingOpacity={buildingOpacity}
+        onBuildingOpacityChange={setBuildingOpacity}
+      />
 
       {/* Map view: kept mounted so Leaflet retains its viewport state */}
       <div
@@ -258,6 +287,9 @@ export default function App() {
           showEfficiency={showEfficiency}
           selectedBuildingId={selectedBuildingId}
           onSelectBuilding={setSelectedBuildingId}
+          factory={result?.factory ?? null}
+          showDisconnections={showDisconnections}
+          buildingOpacity={buildingOpacity}
         />
 
         <LayerControls
@@ -285,6 +317,9 @@ export default function App() {
           selectedResult={selectedResult}
           onSelectBuilding={setSelectedBuildingId}
           onCloseSelected={() => setSelectedBuildingId(null)}
+          showDisconnections={showDisconnections}
+          onToggleDisconnections={() => setShowDisconnections((v) => { saveShowDisconnections(!v); return !v; })}
+          disconnectionCount={disconnectionCount}
         />
       </div>
 

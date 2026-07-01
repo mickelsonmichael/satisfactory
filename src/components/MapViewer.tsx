@@ -12,12 +12,14 @@ import type {
   BuildingCategory,
   Cave,
   EfficiencyResult,
+  FactoryGraph,
 } from '../types';
 import { WORLD_BOUNDS } from '../lib/coordinates';
 import MarkerLayer from './MarkerLayer';
 import ResourceNodeLayer from './ResourceNodeLayer';
 import BuildingLayer from './BuildingLayer';
 import CaveLayer from './CaveLayer';
+import DisconnectionLayer from './DisconnectionLayer';
 import { iconSizeForZoom } from '../lib/markerIcon';
 
 // Map tiles are self-hosted under public/tiles/ (downloaded by scripts/download-tiles.mjs).
@@ -55,6 +57,9 @@ interface Props {
   showEfficiency: boolean;
   selectedBuildingId: string | null;
   onSelectBuilding: (id: string | null) => void;
+  factory: FactoryGraph | null;
+  showDisconnections: boolean;
+  buildingOpacity: number;
 }
 
 // Reports the visible bounds and zoom after the map settles so MarkerLayer can cull
@@ -82,7 +87,7 @@ function ViewportTracker({
   return null;
 }
 
-export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, buildings, buildingLines, buildingVisibility, caves, showCaves, showHeight, efficiency, showEfficiency, selectedBuildingId, onSelectBuilding }: Props) {
+export default function MapViewer({ result, layerStates, showCollected, localCollected, onMarkCollected, resourceData, resourcePurity, buildings, buildingLines, buildingVisibility, caves, showCaves, showHeight, efficiency, showEfficiency, selectedBuildingId, onSelectBuilding, factory, showDisconnections, buildingOpacity }: Props) {
   const [bounds, setBounds] = useState<LatLngBounds | null>(null);
   // Icons grow with zoom; default to the floor size until the map reports its zoom.
   const [zoom, setZoom] = useState<number>(2);
@@ -124,6 +129,7 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
         showEfficiency={showEfficiency}
         selectedId={selectedBuildingId}
         onSelect={onSelectBuilding}
+        opacity={buildingOpacity}
       />
 
       {result &&
@@ -158,6 +164,13 @@ export default function MapViewer({ result, layerStates, showCollected, localCol
 
       {/* Cave outlines — static world geometry, toggled by the "Show Caves" checkbox. */}
       <CaveLayer caves={caves} visible={showCaves} />
+
+      {/* Disconnection / no-power markers — sit above building canvas and caves. */}
+      <DisconnectionLayer
+        factory={factory}
+        visible={showDisconnections}
+        onSelectBuilding={onSelectBuilding}
+      />
     </MapContainer>
   );
 }

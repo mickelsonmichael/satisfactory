@@ -13,12 +13,14 @@ import { extractDropPodIds } from '../lib/parserAdapter';
 import {
   loadAutoRefresh,
   saveAutoRefresh,
+  loadAutoRefreshInterval,
+  saveAutoRefreshInterval,
   loadSeenDropPodIds,
   mergeSeenDropPodIds,
+  type AutoRefreshInterval,
 } from '../lib/filterStorage';
 import type { ManifestSave, ParseResult, StaticCollectibles, StaticMarker } from '../types';
 
-const AUTO_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 export type ActiveView = 'map' | 'stats' | 'recipes';
 
@@ -43,6 +45,8 @@ export interface SaveContextValue {
   goOldest: () => void;
   autoRefresh: boolean;
   setAutoRefresh: (v: boolean) => void;
+  autoRefreshInterval: AutoRefreshInterval;
+  setAutoRefreshInterval: (v: AutoRefreshInterval) => void;
 }
 
 const SaveContext = createContext<SaveContextValue | null>(null);
@@ -60,6 +64,7 @@ export function SaveProvider({ children }: { children: ReactNode }) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [autoRefresh, setAutoRefreshState] = useState<boolean>(loadAutoRefresh);
+  const [autoRefreshInterval, setAutoRefreshIntervalState] = useState<AutoRefreshInterval>(loadAutoRefreshInterval);
   const [seenDropPodIds, setSeenDropPodIds] = useState<ReadonlySet<string>>(loadSeenDropPodIds);
 
   useEffect(() => {
@@ -72,6 +77,11 @@ export function SaveProvider({ children }: { children: ReactNode }) {
   const setAutoRefresh = useCallback((v: boolean) => {
     setAutoRefreshState(v);
     saveAutoRefresh(v);
+  }, []);
+
+  const setAutoRefreshInterval = useCallback((v: AutoRefreshInterval) => {
+    setAutoRefreshIntervalState(v);
+    saveAutoRefreshInterval(v);
   }, []);
 
   // Jump to the default save once the manifest has loaded.
@@ -96,12 +106,12 @@ export function SaveProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saves.length]);
 
-  // While auto-refresh is on, re-check the manifest every 15 minutes for a newer save.
+  // While auto-refresh is on, re-check the manifest on the configured interval for a newer save.
   useEffect(() => {
     if (!autoRefresh) return;
-    const id = setInterval(refetch, AUTO_REFRESH_INTERVAL_MS);
+    const id = setInterval(refetch, autoRefreshInterval * 60 * 1000);
     return () => clearInterval(id);
-  }, [autoRefresh, refetch]);
+  }, [autoRefresh, autoRefreshInterval, refetch]);
 
   // When a refetch surfaces a newer save (its filename changes), jump to it automatically.
   const lastNewestRef = useRef<string | null>(null);
@@ -178,6 +188,8 @@ export function SaveProvider({ children }: { children: ReactNode }) {
     goOldest,
     autoRefresh,
     setAutoRefresh,
+    autoRefreshInterval,
+    setAutoRefreshInterval,
   };
 
   return <SaveContext.Provider value={value}>{children}</SaveContext.Provider>;

@@ -15,6 +15,8 @@ export interface CollectibleMarker {
   y: number;   // game Y in cm (north-south, positive = south in Unreal convention)
   z: number;   // game Z in cm (elevation)
   collected: boolean;
+  // Hard drives only: items required to open the drop pod (mActivationCost).
+  cost?: Array<{ item: string; amount: number }>;
 }
 
 export interface StaticMarker {
@@ -262,11 +264,17 @@ export interface FactoryNode {
   kind: FactoryNodeKind;
   x: number;             // game X (cm) — for labels / linking back to the footprint
   y: number;
+  z: number;             // game Z (cm), elevation
   recipePath?: string;   // Recipe_*_C (factories)
   clock: number;         // mCurrentPotential (1.0 when unset)
   boost: number;         // mProductionBoost / somersloop multiplier (1.0 when unset)
   productivity: number | null; // game's measured uptime 0..1, or null if unknown
   resourceNodeId?: string;     // extractors: mExtractableResource pathName
+  openInputs: number;      // count of unconnected Input#/PipeInputFactory# ports
+  openOutputs: number;     // count of unconnected Output#/PipeOutputFactory# ports
+  connectedInputs: number;  // count of connected Input#/PipeInputFactory# ports
+  connectedOutputs: number; // count of connected Output#/PipeOutputFactory# ports
+  hasPower: boolean;    // false only when no power cable is attached
 }
 
 export interface FactoryEdge {

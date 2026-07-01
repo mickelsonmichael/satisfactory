@@ -14,7 +14,6 @@ import { getCollectibleIconUrl } from '../lib/icons';
 import { BUILDING_CATEGORIES, humanize } from '../lib/buildings';
 import { headlineUtil, STATUS_COLOR, utilColor } from '../lib/efficiencyDisplay';
 import EfficiencyPanel from './EfficiencyPanel';
-import { useSave } from '../context/SaveContext';
 import { TOP_NAV_HEIGHT } from './TopNav';
 
 interface Props {
@@ -42,6 +41,9 @@ interface Props {
   selectedResult: EfficiencyResult | null;
   onSelectBuilding: (id: string | null) => void;
   onCloseSelected: () => void;
+  showDisconnections: boolean;
+  onToggleDisconnections: () => void;
+  disconnectionCount: number;
 }
 
 // The set of purities a layer actually contains, so absent ones render no checkbox.
@@ -85,8 +87,10 @@ export default function LayerControls({
   selectedResult,
   onSelectBuilding,
   onCloseSelected,
+  showDisconnections,
+  onToggleDisconnections,
+  disconnectionCount,
 }: Props) {
-  const { autoRefresh, setAutoRefresh } = useSave();
   const [resourcesExpanded, setResourcesExpanded] = useState(false);
   const [buildingsExpanded, setBuildingsExpanded] = useState(false);
   const [collectiblesExpanded, setCollectiblesExpanded] = useState(true);
@@ -268,15 +272,18 @@ export default function LayerControls({
 
         <label
           style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-          title="Automatically re-check for a newer save every 15 minutes and load it when found"
+          title="Show broken-link markers on machines with open conveyor/pipe ports, and lightning markers on machines with no power connection"
         >
           <input
             type="checkbox"
-            checked={autoRefresh}
-            onChange={() => setAutoRefresh(!autoRefresh)}
-            style={{ accentColor: '#FA9549', width: 14, height: 14 }}
+            checked={showDisconnections}
+            onChange={onToggleDisconnections}
+            style={{ accentColor: '#f97316', width: 14, height: 14 }}
           />
-          <span style={{ color: '#888', fontSize: 12 }}>Auto-refresh (15 min)</span>
+          <span style={{ flex: 1, color: '#888', fontSize: 12 }}>Show disconnections</span>
+          {disconnectionCount > 0 && (
+            <span style={{ color: '#f97316', fontSize: 11 }}>{disconnectionCount}</span>
+          )}
         </label>
 
       </div>
