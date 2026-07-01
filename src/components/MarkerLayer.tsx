@@ -4,6 +4,7 @@ import type { LatLngBounds } from 'leaflet';
 import type { CollectibleMarker, CollectibleType } from '../types';
 import { gameToLatLng } from '../lib/coordinates';
 import { getIcon } from '../lib/icons';
+import { humanize } from '../lib/buildings';
 
 interface PositionedMarker extends CollectibleMarker {
   lat: number;
@@ -92,6 +93,16 @@ export default function MarkerLayer({
         >
           <Popup className="sf-popup">
             <div className="sf-pop-title">{label}</div>
+            {m.cost && m.cost.length > 0 && (
+              <dl className="sf-pop-coords sf-pop-cost">
+                {m.cost.map(({ item, amount }) => (
+                  <>
+                    <dt key={`${item}-dt`}>{humanize(item)}</dt>
+                    <dd key={`${item}-dd`}>{amount.toLocaleString()}</dd>
+                  </>
+                ))}
+              </dl>
+            )}
             <dl className="sf-pop-coords">
               <dt>X</dt>
               <dd>{Math.round(m.x / 100)} m</dd>
@@ -116,6 +127,16 @@ export default function MarkerLayer({
           <Popup className="sf-popup">
             <div className="sf-pop-title">{label}</div>
             <span className="sf-pop-badge collected">Collected</span>
+            {m.cost && m.cost.length > 0 && (
+              <dl className="sf-pop-coords sf-pop-cost" style={{ opacity: 0.6 }}>
+                {m.cost.map(({ item, amount }) => (
+                  <>
+                    <dt key={`${item}-dt`}>{humanize(item)}</dt>
+                    <dd key={`${item}-dd`}>{amount.toLocaleString()}</dd>
+                  </>
+                ))}
+              </dl>
+            )}
             <dl className="sf-pop-coords">
               <dt>X</dt>
               <dd>{Math.round(m.x / 100)} m</dd>

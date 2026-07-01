@@ -15,6 +15,8 @@ export interface CollectibleMarker {
   y: number;   // game Y in cm (north-south, positive = south in Unreal convention)
   z: number;   // game Z in cm (elevation)
   collected: boolean;
+  // Hard drives only: items required to open the drop pod (mActivationCost).
+  cost?: Array<{ item: string; amount: number }>;
 }
 
 export interface StaticMarker {
