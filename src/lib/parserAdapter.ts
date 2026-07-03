@@ -1,5 +1,5 @@
 import { Parser } from '@etothepii/satisfactory-file-parser';
-import type { Building, BuildingInventory, BuildingLine, CollectibleMarker, InventoryItem, ParseResult, StaticMarker } from '../types';
+import type { Building, BuildingInventory, BuildingLine, CollectibleMarker, ParseResult, StaticMarker } from '../types';
 import { computeStats } from './stats';
 import { buildFactoryGraph } from './factoryGraph';
 import { classify, footprintFor, humanizeRecipe, shortClass } from './buildings';
