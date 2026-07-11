@@ -1,4 +1,5 @@
 import type { SaveStats, StatGroup, StatItem } from '../types';
+import { allObjects, buildableEntries, shortClass, splineLengthCm, type SaveLevel } from './saveObject';
 
 // Computes the aggregate "fun stats" shown in the Stats tab from a parsed save.
 //
@@ -12,56 +13,13 @@ import type { SaveStats, StatGroup, StatItem } from '../types';
 //     class reference plus an `instances[]` array. A megabase has tens of thousands of
 //     these, so they dominate the "things built" counts.
 
-interface RawObj {
-  typePath?: string;
-  properties?: Record<string, unknown> & {
-    mSplineData?: { values?: { properties?: { Location?: { value?: Vec3 } } }[] };
-  };
-  // Present on the BuildableSubsystem actor; holds all lightweight buildables.
-  specialProperties?: {
-    type?: string;
-    buildables?: { typeReference?: { pathName?: string }; instances?: unknown[] }[];
-  };
-}
-interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
-interface RawLevel {
-  objects?: RawObj[];
-}
-
-// "/Game/.../Build_ConveyorBeltMk3.Build_ConveyorBeltMk3_C" -> "Build_ConveyorBeltMk3"
-function shortClass(tp: string): string {
-  const seg = tp.split('/').pop() ?? tp;
-  return seg.split('.')[0];
-}
-
-// Straight-line length (cm) through a spline's saved points. Belts/pipes/tracks are
-// slightly curved, so this very mildly underestimates, but it is plenty accurate for a
-// headline number.
-function splineLengthCm(o: RawObj): number {
-  const vals = o.properties?.mSplineData?.values;
-  if (!Array.isArray(vals) || vals.length < 2) return 0;
-  let len = 0;
-  let prev: Vec3 | undefined;
-  for (const v of vals) {
-    const p = v?.properties?.Location?.value;
-    if (!p) continue;
-    if (prev) len += Math.hypot(p.x - prev.x, p.y - prev.y, p.z - prev.z);
-    prev = p;
-  }
-  return len;
-}
-
 // Foundations are an 8 m × 8 m square footprint regardless of thickness (8x1/8x2/8x4).
 const FOUNDATION_AREA_M2 = 64;
 // A regulation football (soccer) pitch, for a relatable area comparison.
 const FOOTBALL_PITCH_M2 = 7140;
 
 export function computeStats(
-  levels: RawLevel[],
+  levels: SaveLevel[],
   playDurationSeconds: number,
 ): SaveStats {
   // shortClass -> count, over every object regardless of kind.
@@ -76,30 +34,25 @@ export function computeStats(
   let buildableTotal = 0;
   let enemyCount = 0;
 
-  for (const level of levels) {
-    for (const o of level.objects ?? []) {
-      const tp = o.typePath ?? '';
-      const cls = shortClass(tp);
-      count.set(cls, (count.get(cls) ?? 0) + 1);
+  for (const o of allObjects(levels)) {
+    const tp = o.typePath ?? '';
+    const cls = shortClass(tp);
+    count.set(cls, (count.get(cls) ?? 0) + 1);
 
-      if (tp.includes('/Buildable/')) buildableTotal += 1;
-      if (tp.includes('/Creature/Enemy/') && cls.startsWith('Char_')) enemyCount += 1;
+    if (tp.includes('/Buildable/')) buildableTotal += 1;
+    if (tp.includes('/Creature/Enemy/') && cls.startsWith('Char_')) enemyCount += 1;
 
-      // Lightweight buildables packed on the BuildableSubsystem actor.
-      const sp = o.specialProperties;
-      if (sp?.type === 'BuildableSubsystemSpecialProperties' && Array.isArray(sp.buildables)) {
-        for (const b of sp.buildables) {
-          const bc = shortClass(b.typeReference?.pathName ?? '');
-          if (bc) lw.set(bc, (lw.get(bc) ?? 0) + (b.instances?.length ?? 0));
-        }
-      }
-
-      // Spline lengths by transport kind.
-      if (/ConveyorBelt/.test(tp)) beltLen += splineLengthCm(o);
-      else if (/PipeHyper/.test(tp)) hyperLen += splineLengthCm(o);
-      else if (/Pipeline|Build_Pipe/.test(tp)) pipeLen += splineLengthCm(o);
-      else if (/RailroadTrack/.test(tp)) railLen += splineLengthCm(o);
+    // Lightweight buildables packed on the BuildableSubsystem actor.
+    for (const b of buildableEntries(o)) {
+      const bc = shortClass(b.typeReference?.pathName ?? '');
+      if (bc) lw.set(bc, (lw.get(bc) ?? 0) + (b.instances?.length ?? 0));
     }
+
+    // Spline lengths by transport kind.
+    if (/ConveyorBelt/.test(tp)) beltLen += splineLengthCm(o);
+    else if (/PipeHyper/.test(tp)) hyperLen += splineLengthCm(o);
+    else if (/Pipeline|Build_Pipe/.test(tp)) pipeLen += splineLengthCm(o);
+    else if (/RailroadTrack/.test(tp)) railLen += splineLengthCm(o);
   }
 
   // Sum counts whose class name matches a pattern.

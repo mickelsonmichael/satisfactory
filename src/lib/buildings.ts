@@ -8,6 +8,7 @@
 // BuildableSubsystem). Both are reduced to a flat `Building` footprint; see types.ts.
 
 import type { BuildingCategory, BuildingCategoryDef } from '../types';
+import { shortClass } from './saveObject';
 
 // Display order + legend colors for the Buildings filter section. Colors are picked to
 // read against the busy terrain map at ~35% fill opacity and to separate the categories.
@@ -21,12 +22,6 @@ export const BUILDING_CATEGORIES: BuildingCategoryDef[] = [
   { id: 'vehicle', label: 'Trains & vehicles', color: '#56c271' },
   { id: 'misc', label: 'Other', color: '#9aa0a6' },
 ];
-
-// "/Game/.../Build_SmelterMk1.Build_SmelterMk1_C" -> "Build_SmelterMk1"
-export function shortClass(path: string): string {
-  const seg = path.split('/').pop() ?? path;
-  return seg.split('.')[0];
-}
 
 // Ordered, first-match-wins classification rules. More specific patterns come first so
 // e.g. PowerPole is 'power' before a generic 'Pole' could fall elsewhere.

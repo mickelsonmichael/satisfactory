@@ -2,110 +2,38 @@ import { Parser } from '@etothepii/satisfactory-file-parser';
 import type { Building, BuildingInventory, BuildingLine, CollectibleMarker, ParseResult, StaticMarker } from '../types';
 import { computeStats } from './stats';
 import { buildFactoryGraph } from './factoryGraph';
-import { classify, footprintFor, humanizeRecipe, shortClass } from './buildings';
-
-interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
-interface Quat {
-  x: number;
-  y: number;
-  z: number;
-  w: number;
-}
-interface Transform {
-  translation?: Vec3;
-  rotation?: Quat;
-}
-
-// One placement inside a lightweight-buildable entry (foundations/walls/ramps).
-interface BuildableInstance {
-  transform?: Transform;
-}
-interface BuildableEntry {
-  typeReference?: { pathName?: string };
-  instances?: BuildableInstance[];
-}
-
-interface SaveObject {
-  typePath: string;
-  instanceName: string;
-  properties?: Record<string, { value: unknown }>;
-  transform?: Transform;
-  specialProperties?: {
-    type?: string;
-    buildables?: BuildableEntry[];
-  };
-}
-
-// Actor instanceName for a component instanceName ("…Build_X_C_1.StorageInventory" → "…Build_X_C_1").
-function parentOf(instanceName: string): string {
-  const i = instanceName.lastIndexOf('.');
-  return i >= 0 ? instanceName.slice(0, i) : instanceName;
-}
-
-// Yaw (rotation about Z) in radians from a quaternion. Buildings only rotate about the
-// vertical axis, so the X/Y components are ~0 and this reduces to 2*atan2(z, w).
-function yawOf(q?: Quat): number {
-  if (!q) return 0;
-  return 2 * Math.atan2(q.z, q.w);
-}
-
-// A spline point's local Location within the object frame.
-interface SplinePoint {
-  properties?: { Location?: { value?: Vec3 } };
-}
-
-// Rotate a local vector by a quaternion (standard v' = v + 2q_w(q×v) + 2q×(q×v)) and add
-// the translation, giving world coordinates. Most belts have identity rotation, but pipes
-// and angled segments can be rotated, so applying the full quaternion is the safe path.
-function localToWorldXY(p: Vec3, t: Transform): [number, number] {
-  const q = t.rotation ?? { x: 0, y: 0, z: 0, w: 1 };
-  const tr = t.translation ?? { x: 0, y: 0, z: 0 };
-  // cross = q_xyz × p
-  const cx = q.y * p.z - q.z * p.y;
-  const cy = q.z * p.x - q.x * p.z;
-  const cz = q.x * p.y - q.y * p.x;
-  // rotated = p + 2*w*cross + 2*(q_xyz × cross)
-  const wx = p.x + 2 * (q.w * cx + (q.y * cz - q.z * cy));
-  const wy = p.y + 2 * (q.w * cy + (q.z * cx - q.x * cz));
-  return [wx + tr.x, wy + tr.y];
-}
+import { classify, footprintFor, humanizeRecipe } from './buildings';
+import {
+  allObjects,
+  buildableEntries,
+  classNameOf,
+  hasProp,
+  localToWorldXY,
+  parentOf,
+  propArray,
+  propValue,
+  refPath,
+  shortClass,
+  splinePoints,
+  yawOf,
+  type SaveLevel,
+  type SaveObject,
+} from './saveObject';
 
 // Spline-based buildings (belts, pipes, hypertubes, rails) carry their path in
 // `mSplineData.values[i].properties.Location.value` as points local to the object's
 // transform. Returns the world-space polyline, or null if there is no usable spline.
 function splineLine(o: SaveObject): BuildingLine | null {
-  // mSplineData exposes `.values` directly (no `.value` wrapper), matching stats.ts.
-  const vals = (o.properties?.['mSplineData'] as { values?: SplinePoint[] } | undefined)?.values;
-  if (!Array.isArray(vals) || vals.length < 2 || !o.transform) return null;
+  const locals = splinePoints(o);
+  if (locals.length < 2 || !o.transform) return null;
   const pts: number[] = [];
-  for (const v of vals) {
-    const loc = v.properties?.Location?.value;
-    if (!loc) continue;
+  for (const loc of locals) {
     const [wx, wy] = localToWorldXY(loc, o.transform);
     pts.push(wx, wy);
   }
   if (pts.length < 4) return null;
-  const cls = shortClass(o.typePath);
+  const cls = shortClass(o.typePath ?? '');
   return { cls, category: classify(cls), pts };
-}
-
-// An ObjectProperty value references another actor by path.
-interface ObjectRef {
-  levelName: string;
-  pathName: string;
-}
-
-interface SaveCollectable {
-  pathName: string;
-}
-
-interface SaveLevel {
-  objects: SaveObject[];
-  collectables?: SaveCollectable[];
 }
 
 // Lightweight extraction of DropPod instanceNames for bootstrapping the "seen" set.
@@ -114,11 +42,11 @@ interface SaveLevel {
 export function extractDropPodIds(filename: string, buffer: ArrayBuffer): string[] {
   const save = Parser.ParseSave(filename, buffer);
   const levels = Object.values(save.levels as Record<string, SaveLevel>);
-  return levels.flatMap((l) =>
-    (l.objects ?? [])
-      .filter((o) => (o as SaveObject).typePath?.includes('BP_DropPod'))
-      .map((o) => (o as SaveObject).instanceName),
-  );
+  const ids: string[] = [];
+  for (const o of allObjects(levels)) {
+    if (o.typePath?.includes('BP_DropPod') && o.instanceName) ids.push(o.instanceName);
+  }
+  return ids;
 }
 
 export async function parseSaveFile(
@@ -145,55 +73,19 @@ export async function parseSaveFile(
   // via property). A pod tracks mHasBeenOpened (casing cracked) and mHasBeenLooted (drive
   // removed); both are serialized onto the actor together the moment it is looted.
   //
-  // NOTE: we test for the *presence* of mHasBeenLooted, not its boolean value. The
-  // @etothepii/satisfactory-file-parser build we use mis-reads every BoolProperty as
-  // `false` (0 of ~1600 bools in a real save parse as true), so `value === true` would
-  // never match and no hard drive would ever show collected. UE only serializes these
-  // properties once the pod has been interacted with — an untouched pod omits them
-  // entirely — so presence is the reliable "drive taken" signal.
-  const lootedDropPodPaths = new Set(
-    levels.flatMap((l) =>
-      (l.objects ?? [])
-        .filter(
-          (o) =>
-            o.typePath?.includes('BP_DropPod') &&
-            o.properties?.['mHasBeenLooted'] !== undefined,
-        )
-        .map((o) => o.instanceName),
-    ),
-  );
-
+  // NOTE: hasProp tests for the *presence* of mHasBeenLooted, not its boolean value —
+  // the parser mis-reads every BoolProperty as `false` (see saveObject.hasProp). UE only
+  // serializes these properties once the pod has been interacted with, so presence is
+  // the reliable "drive taken" signal.
+  const lootedDropPodPaths = new Set<string>();
   // ALL DropPod instanceNames present in this save's objects (looted or not). Used for
   // two purposes: returned as dropPodIds so the caller can accumulate the "ever seen"
   // set across saves, and used below to detect the "absent = deconstructed" case.
-  const allDropPodIds = new Set(
-    levels.flatMap((l) =>
-      (l.objects ?? [])
-        .filter((o) => o.typePath?.includes('BP_DropPod'))
-        .map((o) => o.instanceName),
-    ),
-  );
-
-  // mActivationCost on each Drop Pod: TArray<FItemAmount> with ItemClass (ObjectRef)
-  // and Amount (int). The parser may expose the array under .value or .values, and each
-  // struct element's fields may or may not be wrapped in an extra .value layer, so we
-  // try both access patterns defensively.
-  // mActivationCost is defined in the Blueprint asset, not serialized as save-file
-  // instance data, so it cannot be read from the save. Costs are stored as static
-  // data in collectibles.json (the `cost` field on each hard-drive marker) and
-  // passed through via StaticMarker below.
-  const dropPodCosts = new Map<string, Array<{ item: string; amount: number }>>();
-
+  const allDropPodIds = new Set<string>();
   // Resource nodes a player has built an extractor on are "claimed". Miners, oil pumps,
   // and resource-well extractors all point at their node/satellite via the
   // `mExtractableResource` ObjectProperty, whose pathName matches a resource node id.
   const claimedNodes = new Set<string>();
-  for (const l of levels) {
-    for (const o of l.objects ?? []) {
-      const ref = o.properties?.['mExtractableResource']?.value as ObjectRef | undefined;
-      if (ref?.pathName) claimedNodes.add(ref.pathName);
-    }
-  }
 
   // Every placed building, as a flat footprint list. Two sources:
   //  1. Full `Build_*` objects with a transform — machines, generators, belts, poles.
@@ -203,62 +95,6 @@ export async function parseSaveFile(
   // Spline buildings (belts/pipes/hypertubes/rails) drawn as connected polylines so the
   // network is visible instead of a dot at each origin.
   const buildingLines: BuildingLine[] = [];
-  for (const l of levels) {
-    for (const o of l.objects ?? []) {
-      const t = o.transform;
-      if (o.typePath?.includes('/Buildable/') && t?.translation) {
-        // Belts/pipes/etc. carry a spline — render their path, not a footprint.
-        const line = splineLine(o);
-        if (line) {
-          buildingLines.push(line);
-        } else {
-          const cls = shortClass(o.typePath);
-          // The *production* recipe (what the machine is currently making) is the interesting
-          // stat. mBuiltWithRecipe just restates the building type, so it is ignored.
-          const recipe = o.properties?.['mCurrentRecipe']?.value;
-          const recipePath = (recipe as { pathName?: string } | undefined)?.pathName;
-          const { w, d } = footprintFor(cls);
-          buildings.push({
-            cls,
-            category: classify(cls),
-            x: t.translation.x,
-            y: t.translation.y,
-            z: t.translation.z,
-            yaw: yawOf(t.rotation),
-            w,
-            d,
-            recipe: recipePath ? humanizeRecipe(recipePath) : undefined,
-            // Keep the actor id so a clicked footprint can find its FactoryGraph node.
-            id: o.instanceName,
-          });
-        }
-      }
-
-      const sp = o.specialProperties;
-      if (sp?.type === 'BuildableSubsystemSpecialProperties' && Array.isArray(sp.buildables)) {
-        for (const entry of sp.buildables) {
-          const cls = shortClass(entry.typeReference?.pathName ?? '');
-          if (!cls) continue;
-          const category = classify(cls);
-          const { w, d } = footprintFor(cls);
-          for (const inst of entry.instances ?? []) {
-            const it = inst.transform;
-            if (!it?.translation) continue;
-            buildings.push({
-              cls,
-              category,
-              x: it.translation.x,
-              y: it.translation.y,
-              z: it.translation.z,
-              yaw: yawOf(it.rotation),
-              w,
-              d,
-            });
-          }
-        }
-      }
-    }
-  }
 
   // Inventory contents: scan every object for mInventoryStacks (present on
   // FGInventoryComponent sub-objects). The component's instanceName parent (strip last
@@ -269,15 +105,81 @@ export async function parseSaveFile(
   // being fully occupied sets the flag (e.g. a backed-up output inventory).
   const rawInventories = new Map<string, Map<string, number>>();
   const fullActors = new Set<string>();
-  for (const l of levels) {
-    for (const o of l.objects ?? []) {
-      const stacksProp = o.properties?.['mInventoryStacks'];
-      if (!stacksProp) continue;
-      const values = (stacksProp as { values?: unknown[] }).values ?? [];
-      if (values.length === 0) continue;
+
+  // Purchased/unlocked schematics from the SchematicManager. The manager object stores
+  // mPurchasedSchematics (bought at HUB) and mAvailableSchematics (can buy now). We try
+  // several property names to be resilient across save versions.
+  const unlockedSchematicSet = new Set<string>();
+  const SCHEMATIC_PROPS = ['mPurchasedSchematics', 'mAvailableSchematics', 'mObtainedSchematics'];
+
+  for (const o of allObjects(levels)) {
+    // --- drop pods ---
+    if (o.typePath?.includes('BP_DropPod') && o.instanceName) {
+      allDropPodIds.add(o.instanceName);
+      if (hasProp(o, 'mHasBeenLooted')) lootedDropPodPaths.add(o.instanceName);
+    }
+
+    // --- claimed resource nodes ---
+    const resourceRef = refPath(propValue(o, 'mExtractableResource'));
+    if (resourceRef) claimedNodes.add(resourceRef);
+
+    // --- buildings & spline lines ---
+    const t = o.transform;
+    if (o.typePath?.includes('/Buildable/') && t?.translation) {
+      // Belts/pipes/etc. carry a spline — render their path, not a footprint.
+      const line = splineLine(o);
+      if (line) {
+        buildingLines.push(line);
+      } else {
+        const cls = shortClass(o.typePath);
+        // The *production* recipe (what the machine is currently making) is the interesting
+        // stat. mBuiltWithRecipe just restates the building type, so it is ignored.
+        const recipePath = refPath(propValue(o, 'mCurrentRecipe'));
+        const { w, d } = footprintFor(cls);
+        buildings.push({
+          cls,
+          category: classify(cls),
+          x: t.translation.x,
+          y: t.translation.y,
+          z: t.translation.z,
+          yaw: yawOf(t.rotation),
+          w,
+          d,
+          recipe: recipePath ? humanizeRecipe(recipePath) : undefined,
+          // Keep the actor id so a clicked footprint can find its FactoryGraph node.
+          id: o.instanceName,
+        });
+      }
+    }
+
+    // --- lightweight buildables (foundations/walls/ramps on the BuildableSubsystem) ---
+    for (const entry of buildableEntries(o)) {
+      const cls = shortClass(entry.typeReference?.pathName ?? '');
+      if (!cls) continue;
+      const category = classify(cls);
+      const { w, d } = footprintFor(cls);
+      for (const inst of entry.instances ?? []) {
+        const it = inst.transform;
+        if (!it?.translation) continue;
+        buildings.push({
+          cls,
+          category,
+          x: it.translation.x,
+          y: it.translation.y,
+          z: it.translation.z,
+          yaw: yawOf(it.rotation),
+          w,
+          d,
+        });
+      }
+    }
+
+    // --- inventories ---
+    const stacks = propArray(o.properties?.['mInventoryStacks']);
+    if (stacks.length > 0 && o.instanceName) {
       const actorId = parentOf(o.instanceName);
       let occupiedSlots = 0;
-      for (const stackVal of values) {
+      for (const stackVal of stacks) {
         const sv = stackVal as { properties?: Record<string, unknown> } | undefined;
         // Item is a StructProperty whose value is FInventoryItem { itemReference: ObjectReference }.
         const itemProp = sv?.properties?.['Item'] as { value?: { itemReference?: { pathName?: string } } } | undefined;
@@ -291,9 +193,30 @@ export async function parseSaveFile(
           actorMap.set(cls, (actorMap.get(cls) ?? 0) + numItems);
         }
       }
-      if (occupiedSlots >= values.length) fullActors.add(actorId);
+      if (occupiedSlots >= stacks.length) fullActors.add(actorId);
+    }
+
+    // --- schematics ---
+    for (const propName of SCHEMATIC_PROPS) {
+      const prop = o.properties?.[propName];
+      if (!prop) continue;
+      for (const item of propArray(prop)) {
+        // Each item is an ObjectRef with a pathName like:
+        //   /Game/FactoryGame/Schematics/Schematic_2-5.Schematic_2-5_C
+        // UE convention: "Package.ClassName_C" — greeny's schematic keys use the class
+        // name (after the last dot, keeping "_C"), so classNameOf, not shortClass.
+        const path =
+          refPath(item) ?? refPath((item as { value?: unknown } | undefined)?.value);
+        if (path) {
+          const cls = classNameOf(path);
+          if (cls.startsWith('Schematic_') || cls.startsWith('Research_')) {
+            unlockedSchematicSet.add(cls);
+          }
+        }
+      }
     }
   }
+
   const inventories = new Map<string, BuildingInventory>();
   for (const [actorId, itemMap] of rawInventories) {
     inventories.set(actorId, {
@@ -304,6 +227,10 @@ export async function parseSaveFile(
     });
   }
 
+  // Hard-drive unlock costs (mActivationCost) are defined in the Blueprint asset, not
+  // serialized as save-file instance data, so they cannot be read from the save. They
+  // ship as static data in collectibles.json (the `cost` field on each hard-drive
+  // marker) and pass through via StaticMarker here.
   const markers: CollectibleMarker[] = staticMarkers.map((sm) => ({
     id: sm.id,
     type: sm.type,
@@ -320,47 +247,9 @@ export async function parseSaveFile(
       collectedPaths.has(sm.id) ||
       lootedDropPodPaths.has(sm.id) ||
       (sm.type === 'hardDrive' && seenDropPodIds.has(sm.id) && !allDropPodIds.has(sm.id)),
-    cost: sm.type === 'hardDrive' ? (sm.cost ?? dropPodCosts.get(sm.id)) : undefined,
+    cost: sm.type === 'hardDrive' ? sm.cost : undefined,
     power: sm.type === 'hardDrive' ? sm.power : undefined,
   }));
-
-  // Extract purchased/unlocked schematics from the SchematicManager. The manager object
-  // stores mPurchasedSchematics (bought at HUB) and mAvailableSchematics (can buy now).
-  // We try several property names to be resilient across save versions.
-  const unlockedSchematicSet = new Set<string>();
-  const SCHEMATIC_PROPS = ['mPurchasedSchematics', 'mAvailableSchematics', 'mObtainedSchematics'];
-
-  for (const l of levels) {
-    for (const o of l.objects ?? []) {
-      for (const propName of SCHEMATIC_PROPS) {
-        const prop = o.properties?.[propName];
-        if (!prop) continue;
-        // Array values may sit in .value (array) or .values depending on parser version.
-        const raw = prop.value;
-        const items: unknown[] = Array.isArray(raw)
-          ? raw
-          : Array.isArray((prop as { values?: unknown[] }).values)
-          ? (prop as { values?: unknown[] }).values!
-          : [];
-        for (const item of items) {
-          // Each item is an ObjectRef with a pathName like:
-          //   /Game/FactoryGame/Schematics/Schematic_2-5.Schematic_2-5_C
-          // UE convention: "Package.ClassName_C" — the class name is the part AFTER the
-          // last dot (shortClass takes the part BEFORE the dot, which is the asset name
-          // without _C and would not match greeny's schematic keys).
-          const path =
-            (item as { pathName?: string })?.pathName ??
-            (item as { value?: { pathName?: string } })?.value?.pathName;
-          if (path) {
-            const cls = path.split('.').pop() ?? '';
-            if (cls.startsWith('Schematic_') || cls.startsWith('Research_')) {
-              unlockedSchematicSet.add(cls);
-            }
-          }
-        }
-      }
-    }
-  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const header = (save as any).header ?? {};
@@ -370,13 +259,10 @@ export async function parseSaveFile(
     claimedNodes,
     buildings,
     buildingLines,
-    factory: buildFactoryGraph(levels as unknown as Parameters<typeof buildFactoryGraph>[0]),
+    factory: buildFactoryGraph(levels),
     sessionName: header.sessionName ?? header.mapName ?? '',
     saveVersion: header.saveVersion ?? 0,
-    stats: computeStats(
-      levels as unknown as Parameters<typeof computeStats>[0],
-      header.playDurationSeconds ?? 0,
-    ),
+    stats: computeStats(levels, header.playDurationSeconds ?? 0),
     unlockedSchematics: [...unlockedSchematicSet],
     dropPodIds: [...allDropPodIds],
     inventories,

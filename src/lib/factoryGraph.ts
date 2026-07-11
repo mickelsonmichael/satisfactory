@@ -11,18 +11,7 @@
 // ParseResult; the heavy flow analysis over it (lib/efficiency.ts) runs lazily.
 
 import type { FactoryGraph, FactoryNode, FactoryNodeKind, FactoryEdge } from '../types';
-import { shortClass } from './buildings';
-
-interface Vec3 { x: number; y: number; z: number }
-interface RawObj {
-  typePath?: string;
-  instanceName?: string;
-  properties?: Record<string, { value?: unknown } | undefined>;
-  transform?: { translation?: Vec3 };
-  // Power line actors expose source/target connection references here.
-  specialProperties?: { type?: string; source?: { pathName?: string }; target?: { pathName?: string } };
-}
-interface RawLevel { objects?: RawObj[] }
+import { parentOf, propValue, refPath, shortClass, type SaveLevel } from './saveObject';
 
 const FACTORY_CONN = 'FGFactoryConnectionComponent';
 // Pipe ports come in two flavours: FGPipeConnectionComponent on pipeline/junction
@@ -51,14 +40,6 @@ function kindOf(cls: string): FactoryNodeKind | null {
 }
 
 const num = (v: unknown, dflt: number): number => (typeof v === 'number' ? v : dflt);
-const refPath = (v: unknown): string | undefined =>
-  v && typeof v === 'object' && 'pathName' in v ? (v as { pathName?: string }).pathName : undefined;
-
-// Actor instanceName for a component instanceName ("…Build_X_C_1.Output0" → "…Build_X_C_1").
-function parentOf(comp: string): string {
-  const i = comp.lastIndexOf('.');
-  return i >= 0 ? comp.slice(0, i) : comp;
-}
 
 interface Conn {
   parent: string;
@@ -66,7 +47,7 @@ interface Conn {
   role: 'out' | 'in' | 'belt'; // belt = ConveyorAny (a conductor we pass through)
 }
 
-export function buildFactoryGraph(levels: RawLevel[]): FactoryGraph {
+export function buildFactoryGraph(levels: SaveLevel[]): FactoryGraph {
   const nodes = new Map<string, FactoryNode>();
   const conns = new Map<string, Conn>();        // solid connection components
   const beltEnds = new Map<string, string[]>(); // belt/lift actor → its ConveyorAny component names
@@ -102,7 +83,7 @@ export function buildFactoryGraph(levels: RawLevel[]): FactoryGraph {
         const suffix = inst.slice(inst.lastIndexOf('.') + 1);
         const role = suffix.startsWith('Output') ? 'out' : suffix.startsWith('Input') ? 'in' : 'belt';
         const parent = parentOf(inst);
-        const connected = refPath(o.properties?.['mConnectedComponent']?.value);
+        const connected = refPath(propValue(o, 'mConnectedComponent'));
         conns.set(inst, { parent, connected, role });
         if (role === 'belt') {
           const list = beltEnds.get(parent);
@@ -114,7 +95,7 @@ export function buildFactoryGraph(levels: RawLevel[]): FactoryGraph {
 
       // --- fluid connection component: group its owning node by pipe network id ---
       if (PIPE_CONN.test(tp)) {
-        const netId = o.properties?.['mPipeNetworkID']?.value;
+        const netId = propValue(o, 'mPipeNetworkID');
         const parent = parentOf(inst);
         // PipeInputFactory# / PipeOutputFactory# suffixes identify machine-side fluid ports.
         const suffix = inst.slice(inst.lastIndexOf('.') + 1).toLowerCase();
@@ -145,9 +126,8 @@ export function buildFactoryGraph(levels: RawLevel[]): FactoryGraph {
       const cls = shortClass(tp);
       const kind = kindOf(cls);
       if (!kind || !o.transform?.translation) continue;
-      const p = o.properties;
-      const produce = p?.['mCurrentProductivityMeasurementProduceDuration']?.value;
-      const dur = p?.['mCurrentProductivityMeasurementDuration']?.value;
+      const produce = propValue(o, 'mCurrentProductivityMeasurementProduceDuration');
+      const dur = propValue(o, 'mCurrentProductivityMeasurementDuration');
       const durN = typeof dur === 'number' ? dur : 0;
       nodes.set(inst, {
         id: inst,
@@ -156,11 +136,11 @@ export function buildFactoryGraph(levels: RawLevel[]): FactoryGraph {
         x: o.transform.translation.x,
         y: o.transform.translation.y,
         z: o.transform.translation.z ?? 0,
-        recipePath: refPath(p?.['mCurrentRecipe']?.value),
-        clock: num(p?.['mCurrentPotential']?.value, 1),
-        boost: num(p?.['mProductionBoost']?.value, 1),
+        recipePath: refPath(propValue(o, 'mCurrentRecipe')),
+        clock: num(propValue(o, 'mCurrentPotential'), 1),
+        boost: num(propValue(o, 'mProductionBoost'), 1),
         productivity: durN > 0 ? Math.min(1, num(produce, 0) / durN) : null,
-        resourceNodeId: refPath(p?.['mExtractableResource']?.value),
+        resourceNodeId: refPath(propValue(o, 'mExtractableResource')),
         openInputs: 0,
         openOutputs: 0,
         connectedInputs: 0,
@@ -175,7 +155,7 @@ export function buildFactoryGraph(levels: RawLevel[]): FactoryGraph {
   const edges: FactoryEdge[] = [];
   const addEdge = (from: string, to: string) => {
     if (from === to) return;
-    const key = `${from} ${to}`;
+    const key = `${from}\0${to}`;
     if (edgeSet.has(key)) return;
     edgeSet.add(key);
     edges.push({ from, to });

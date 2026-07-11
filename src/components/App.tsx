@@ -174,7 +174,7 @@ export default function App() {
     return result.factory.nodes.filter(
       (n) =>
         (n.kind === 'factory' || n.kind === 'extractor') &&
-        !/FrackingCore/i.test(n.cls) &&
+        !/FrackingCore|FrackingExtractor/i.test(n.cls) &&
         (
           !n.hasPower ||
           (n.openInputs > 0 && n.connectedInputs === 0) ||
