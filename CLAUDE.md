@@ -13,7 +13,17 @@ before implementing save-parsing logic.
 
 ## Parser Notes
 
-We use `@etothepii/satisfactory-file-parser` (npm) for binary parsing. Key quirks:
+We use `@etothepii/satisfactory-file-parser` (npm) for binary parsing.
+
+**`src/lib/saveObject.ts` is the single shared model of parsed save output.** It owns the
+`SaveObject`/`SaveLevel`/`Transform`/`ObjectRef` types and the helpers that encode every
+parser quirk: `shortClass`/`classNameOf`/`parentOf` (path handling), `propValue`/`refPath`/
+`propArray`/`hasProp` (property access), `splinePoints`/`splineLengthCm` (belt/pipe/rail
+splines), `yawOf`/`localToWorldXY` (transforms), and `allObjects`/`buildableEntries`
+(iteration incl. lightweight buildables). New save-reading code must import from there
+rather than redefining raw-object types or property-access logic.
+
+Key parser quirks (all encoded in `saveObject.ts`):
 
 - **BoolProperty bug**: all BoolProperty values parse as `false`. Detect booleans by
   property *presence* rather than value (e.g., `obj.properties['mHasBeenLooted'] !== undefined`).

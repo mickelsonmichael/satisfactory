@@ -27,6 +27,7 @@ import type {
   ResourcePurity,
 } from '../types';
 import { humanize } from './buildings';
+import { classNameOf } from './saveObject';
 import { extractorRatePerMin, inputsPerMin, outputsPerMin, type ItemRate } from './productionRates';
 
 const FULL = 0.95; // ≥ this fraction counts as fully utilized
@@ -40,12 +41,6 @@ interface NodeIO {
   primaryMax: number;   // its per-minute rate at full clock
   recipeName?: string;  // display name of the running recipe (factories)
 }
-
-// Object class name (with the "_C" suffix) from a full path. shortClass() drops the
-// suffix because it splits on the first dot; recipe keys in recipes.json keep it, so the
-// real class name is the segment after the LAST dot:
-// "/Game/…/Recipe_IngotIron.Recipe_IngotIron_C" → "Recipe_IngotIron_C".
-const classNameOf = (path: string): string => path.slice(path.lastIndexOf('.') + 1);
 
 const itemName = (data: RecipeData, item: string): string =>
   data.items[item]?.name ?? humanize(item.replace(/^Desc_/, '').replace(/_C$/, ''));

@@ -9,6 +9,11 @@ The canonical reference implementation used by this project is
 [`@etothepii/satisfactory-file-parser`](https://github.com/etothepii4/satisfactory-file-parser)
 (npm package), a TypeScript library that supports U1.0–U1.2.
 
+In this codebase, `src/lib/saveObject.ts` is the shared model of the parser's output:
+all types and helpers for reading save objects (property access, spline data,
+lightweight buildables, path/class-name handling) live there and are imported by
+`parserAdapter.ts`, `stats.ts`, `factoryGraph.ts`, and `efficiency.ts`.
+
 ---
 
 ## 1. Overview
