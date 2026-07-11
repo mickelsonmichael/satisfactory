@@ -13,9 +13,11 @@ interface Props {
 
 // Only production machines and extractors are checked — they always require power.
 const CHECKED_KINDS = new Set(['factory', 'extractor']);
-// FrackingCore is a passive well-centre node; the satellite FrackingSmasher units
-// carry the power connections, so the core itself should not be flagged.
-const EXCLUDED_CLS_RE = /FrackingCore/i;
+// FrackingCore is a passive well-centre node, and FrackingExtractor is the small
+// satellite Resource Well Extractor placed on sub-nodes — per the wiki, satellites
+// "do not require power" (only the central FrackingSmasher/Pressurizer does), so
+// neither should be flagged for missing power.
+const EXCLUDED_CLS_RE = /FrackingCore|FrackingExtractor/i;
 
 // Broken lightning bolt: two halves of a standard bolt with a visible gap.
 const BROKEN_BOLT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="13" height="13">
